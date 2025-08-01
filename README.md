@@ -2,9 +2,9 @@
 
 Приложение для скачивания ранобэ с сайта Ranobelib.me в формате EPUB с возможностью сохранения изображений. Простой интерфейс делает программу доступной для всех пользователей.
 
-![](https://img.shields.io/badge/python-3.8%252B-blue)
+![](https://img.shields.io/badge/python-3.8+-blue)
 ![](https://img.shields.io/badge/license-MIT-green)
-![](https://img.shields.io/badge/platform-Windows%2520%257C%2520macOS%2520%257C%2520Linux-lightgrey)
+![](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 
 
