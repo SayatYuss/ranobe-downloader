@@ -58,9 +58,9 @@ chmod +x run.sh
 
 ### Использование
 
-#### Вставьте ссылку на новеллу:
+#### Вставьте ссылку на новеллу в окно:
 ```text
-https://ranobelib.me/ru/book/14841--beginning-after-the-end-novel?section=info
+https://ranobelib.me/ru/book/14841--beginning-after-the-end-novel
 ```
 #### Укажите параметры:
 
