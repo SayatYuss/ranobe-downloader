@@ -8,6 +8,8 @@ from typing import Any
 
 from core.chapter_xhtml import chapter_to_xhtml
 from core.download.images import image_refs, FORMATS
+from core.download.plan import make_translations
+from urllib.parse import urlsplit
 from providers.libsocial.titles import TitleProvider
 from providers.libsocial.chapters import ChapterProvider
 from providers.libsocial.chapter_content import ChapterContentProvider
@@ -51,12 +53,16 @@ def _inspect(node: Any, types: Counter, marks: Counter) -> None:
 
 def audit_title(client, reference: str, *, sample: int = 10,
                 branch_id: int | None = None, metadata_only: bool = False,
-                retries: int = 3) -> dict[str, Any]:
+                retries: int = 3, mode: str | None = None) -> dict[str, Any]:
+    if mode is not None and mode not in ('metadata', 'sample', 'full'):
+        raise ValueError('Invalid audit mode')
+    if mode == 'metadata':
+        metadata_only = True
     if sample < 1 or retries < 1:
         raise ValueError("sample and retries must be positive")
     title = with_retries(lambda: TitleProvider(client).get_title(reference), attempts=retries)
     chapters = with_retries(lambda: ChapterProvider(client).get_chapters(title.slug_url), attempts=retries)
-    available = sorted({b.branch_id for c in chapters for b in c.branches if b.branch_id is not None})
+    available = [t.branch_id for t in make_translations(tuple(chapters))]
     if branch_id is not None and available and branch_id not in available:
         raise ValueError(f"Branch {branch_id} not found; available: {available}")
     if branch_id is None and len(available) == 1:
@@ -84,6 +90,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
         result["status"] = "INCONCLUSIVE"
     if result["duplicate_coordinates"]:
         result["issues"].append("Duplicate volume/chapter numbers in selected index")
+        result["status"] = "INCONCLUSIVE"
     if not selected:
         result["status"] = "INCOMPATIBLE"
         result["issues"].append("No chapters in selected branch")
@@ -92,7 +99,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
         return result
     types: Counter = Counter()
     marks: Counter = Counter()
-    for chapter in _sample_evenly(selected, sample):
+    for chapter in (selected if mode == 'full' else _sample_evenly(selected, sample)):
         result["sampled"] += 1
         coordinate = f"{chapter.volume}/{chapter.number}"
         try:
@@ -112,6 +119,14 @@ def audit_title(client, reference: str, *, sample: int = 10,
                         raise ValueError(f"Missing attachment for image: {uid}")
                     if str(attached.get("extension", "")).lower().lstrip(".") not in FORMATS:
                         raise ValueError(f"Unsupported attachment type: {uid}")
+                    path = str(attached.get("originalUrl") or attached.get("url") or "")
+                    parsed = urlsplit(path)
+                    if (parsed.scheme or parsed.netloc or not path.startswith("/uploads/ranobe/")
+                            or ".." in parsed.path.split("/") or parsed.query or parsed.fragment
+                            or parsed.path != path):
+                        raise ValueError(f"Invalid attachment path: {uid}")
+                    if any(ch not in "0123456789abcdef-" for ch in uid.lower()):
+                        raise ValueError(f"Invalid image identifier: {uid}")
                     images[uid] = f"images/{uid}.{str(attached.get('extension')).lower().lstrip('.')}"
             chapter_to_xhtml(content.title or chapter.name or coordinate,
                              content.content, images=images)
@@ -124,6 +139,6 @@ def audit_title(client, reference: str, *, sample: int = 10,
     result["mark_types"] = dict(sorted(marks.items()))
     if result["failed"]:
         result["status"] = "INCOMPATIBLE"
-    elif len(available) > 1 and branch_id is None:
+    elif (len(available) > 1 and branch_id is None) or result["duplicate_coordinates"]:
         result["status"] = "INCONCLUSIVE"
     return result
