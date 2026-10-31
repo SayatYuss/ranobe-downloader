@@ -17,7 +17,7 @@ SIGNATURES = {"image/jpeg": lambda b: b.startswith(bytes.fromhex("ffd8ff")),
               "image/webp": lambda b: len(b) > 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP"}
 HOSTS = ("ranobelib.me", "img3.mixlib.me")
 MAX_SIZE = 15 * 1024 * 1024
-IMAGE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}\\Z")
+IMAGE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 
 def valid_image_identifier(uid: str) -> bool:
