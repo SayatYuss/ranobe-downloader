@@ -78,13 +78,13 @@ class BookDownloader:
                     attempts=retries,
                 )
                 data = raw.data
-                if not isinstance(raw.content, dict):
+                if not isinstance(raw.content, (dict, str)):
                     raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
                 checkpoints.save(item.id, data, volume=item.volume, number=item.number)
                 if delay > 0 and index < len(selected):
                     time.sleep(delay)
             content = data.get('content')
-            if not isinstance(content, dict):
+            if not isinstance(content, (dict, str)):
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
             rendered.append(EpubChapter(label, chapter_to_xhtml(label, content)))
