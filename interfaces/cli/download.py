@@ -54,15 +54,15 @@ def execute(args: argparse.Namespace) -> None:
             plan = downloader.prepare(args.reference)
             print(f'Title: {plan.title.title}', flush=True)
             target = args.output or Path('output') / f'{plan.title.id}.epub'
-            # Keep a single fetched title available for the workflow.
-            downloader.titles.get_title = lambda reference: title
             def report_status(message):
                 if args.verbose or not (message.startswith('  Downloading image ') or
                                         (message.startswith('[') and 'Loading chapter' in message)):
                     print(message, flush=True)
 
-            result = downloader.download(args.reference, target,
-                                         branch_id=args.branch, limit=args.limit,
+            branch_id = args.branch if args.branch is not None else select_translation(
+                plan.translations, interactive=not args.non_interactive)
+            result = downloader.download(plan, target,
+                                         branch_id=branch_id, limit=args.limit,
                                          progress=report, resume=args.resume,
                                          cache_dir=args.cache_dir, delay=args.delay,
                                          retries=args.retries,
