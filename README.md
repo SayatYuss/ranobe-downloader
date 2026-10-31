@@ -105,3 +105,15 @@ ranobe download "246638--heonteodeul-i-jibchaghaneun-jeongsinsangdamsaga-doeeoss
 Обратите внимание: `--limit 66` скачивает первые 66 глав, а не только главу №65.
 HTML-теги `<img>` в старых строковых главах пока не поддержаны; здесь реализованы изображения из JSON/ProseMirror.
 Аудит проверяет структуру вложений, но не их доступность по сети.
+
+### Оптимизация изображений EPUB
+
+По умолчанию используется `--image-mode original`: файлы встраиваются без изменений.
+Режим `optimized` требует Pillow:
+
+```bash
+pip install -e '.[images]'
+ranobe download '246638--heonteodeul-i-jibchaghaneun-jeongsinsangdamsaga-doeeossda' --branch 27690 --limit 66 --resume --image-mode optimized --image-quality 85 --image-max-width 1600 --output output/images-optimized.epub
+```
+
+При оптимизации непрозрачные PNG кодируются в JPEG, если он меньше исходника; широкие PNG уменьшаются по ширине. Изображения с прозрачностью, JPEG, WebP и GIF остаются неизменными. Оригиналы в кеше не изменяются; переключение режимов с `--resume` не требует повторной загрузки медиафайлов.
