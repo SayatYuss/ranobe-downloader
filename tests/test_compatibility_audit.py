@@ -116,3 +116,22 @@ class AuditTests(unittest.TestCase):
                                   resume_state=snapshots[1])
             self.assertEqual(resumed["passed"], 3)
             dp.return_value.get_chapter.assert_called_once()
+
+    def test_html_image_audit_without_download(self):
+        title = SimpleNamespace(id=7, slug_url="7--book", title="Book",
+                                authors=(), description="", cover_url=None)
+        chapter = SimpleNamespace(id=1, volume="1", number="1", index=1,
+                                  name="One", branches=[SimpleNamespace(branch_id=11)])
+        with patch("core.compatibility_audit.TitleProvider") as tp, patch(
+            "core.compatibility_audit.ChapterProvider") as cp, patch(
+            "core.compatibility_audit.ChapterContentProvider") as dp:
+            tp.return_value.get_title.return_value = title
+            cp.return_value.get_chapters.return_value = [chapter]
+            dp.return_value.get_chapter.return_value = SimpleNamespace(
+                title="One",
+                content='<img src="/uploads/ranobe/book/chapters/1/image.png">',
+                data={"id": 1, "attachments": []})
+            result = audit_title(Mock(), "7", delay=0)
+            self.assertEqual(result["status"], "COMPATIBLE")
+            self.assertEqual(result["html_images"], 1)
+
