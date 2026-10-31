@@ -6,6 +6,8 @@ import httpx
 
 from core.auth.storage import KeyringTokenStorage
 from core.book_downloader import BookDownloader
+from exporters.epub import EpubExporter
+from exporters.text import TxtExporter, HtmlExporter
 from interfaces.cli.translation_selector import select_translation
 from providers.libsocial.client import LibSocialClient
 
@@ -13,6 +15,7 @@ from providers.libsocial.client import LibSocialClient
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('reference', help='Title ID, ID--slug, or RanobeLib URL')
     parser.add_argument('--branch', type=int, help='Translation branch ID')
+    parser.add_argument('--format', choices=('epub', 'txt', 'html'), default='epub', help='Output format')
     parser.add_argument('--non-interactive', action='store_true', help='Disable interactive translation menu')
     parser.add_argument('--limit', type=int, help='Download only first N chapters (for testing)')
     parser.add_argument('--output', type=Path, help='Output EPUB path (default: output/<id>.epub)')
@@ -50,10 +53,12 @@ def execute(args: argparse.Namespace) -> None:
             def report(current, total, chapter):
                 print(f'[{current}/{total}] {current / total:.0%}  {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
-            downloader = BookDownloader(client)
+            format_name = args.format
+            exporter = {'epub': EpubExporter, 'txt': TxtExporter, 'html': HtmlExporter}[format_name]()
+            downloader = BookDownloader(client, exporter=exporter)
             plan = downloader.prepare(args.reference)
             print(f'Title: {plan.title.title}', flush=True)
-            target = args.output or Path('output') / f'{plan.title.id}.epub'
+            target = args.output or Path('output') / f'{plan.title.id}.{format_name}'
             def report_status(message):
                 if args.verbose or not (message.startswith('  Downloading image ') or
                                         (message.startswith('[') and 'Loading chapter' in message)):
