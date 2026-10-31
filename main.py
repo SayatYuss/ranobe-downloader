@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from interfaces.cli.auth import login, logout, status
 from interfaces.cli.download import configure_parser, execute
+from interfaces.cli.audit import configure_parser as configure_audit, execute as execute_audit
 
 
 def main() -> None:
@@ -10,16 +11,20 @@ def main() -> None:
     try:
         package_version = version("ranobe-downloader")
     except PackageNotFoundError:
-        package_version = "0.1.0a1"
+        package_version = "0.2.0a1"
     parser.add_argument("--version", action="version", version=f"%(prog)s {package_version}")
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ('login', 'status', 'logout'):
         sub.add_parser(name)
     download = sub.add_parser('download', help='Download a complete EPUB')
     configure_parser(download)
+    audit = sub.add_parser('audit', help='Inspect RanobeLib title compatibility')
+    configure_audit(audit)
     args = parser.parse_args()
     if args.command == 'download':
         execute(args)
+    elif args.command == 'audit':
+        execute_audit(args)
     else:
         {'login': login, 'status': status, 'logout': logout}[args.command]()
 

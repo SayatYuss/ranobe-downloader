@@ -1,0 +1,247 @@
+"""Read-only compatibility sampling for RanobeLib titles."""
+from __future__ import annotations
+
+from collections import Counter
+from decimal import Decimal, InvalidOperation
+from typing import Any, Callable
+from pathlib import Path
+import time
+import httpx
+
+from core.chapter_content import ChapterContentUnavailable
+from core.chapter_xhtml import chapter_to_xhtml
+from core.download.images import image_refs, FORMATS, load_images, valid_image_identifier
+from core.download.html_images import resolve_html_images
+from core.download.plan import make_translations
+from urllib.parse import urlsplit
+from providers.libsocial.titles import TitleProvider
+from providers.libsocial.chapters import ChapterProvider
+from providers.libsocial.chapter_content import ChapterContentProvider
+from core.download.retry import with_retries
+
+
+def _order(chapter):
+    def key(value):
+        try:
+            return (0, Decimal(str(value)))
+        except (InvalidOperation, ValueError):
+            return (1, str(value))
+    return key(chapter.volume), key(chapter.number), chapter.index or 0
+
+
+def _sample_evenly(items: list, count: int) -> list:
+    if count >= len(items):
+        return items[:]
+    if count == 1:
+        return [items[0]]
+    return [items[i * (len(items) - 1) // (count - 1)] for i in range(count)]
+
+
+def _inspect(node: Any, types: Counter, marks: Counter) -> None:
+    if not isinstance(node, dict):
+        types["<invalid>"] += 1
+        return
+    types[str(node.get("type", "<missing>"))] += 1
+    for mark in node.get("marks") or []:
+        if isinstance(mark, dict):
+            marks[str(mark.get("type", "<missing>"))] += 1
+        else:
+            marks["<invalid>"] += 1
+    children = node.get("content") or []
+    if not isinstance(children, list):
+        types["<invalid-content>"] += 1
+    else:
+        for child in children:
+            _inspect(child, types, marks)
+
+
+def audit_title(client, reference: str, *, sample: int = 10,
+                branch_id: int | None = None, metadata_only: bool = False,
+                retries: int = 3, mode: str | None = None,
+                delay: float = 1.0,
+                progress: Callable[[dict[str, Any], int, int], None] | None = None,
+                resume_state: dict[str, Any] | None = None,
+                check_images: bool = False,
+                image_cache_dir: str | Path = 'output/.cache/audit',
+                prepared: tuple[Any, Any] | None = None) -> dict[str, Any]:
+    if mode is not None and mode not in ('metadata', 'sample', 'full'):
+        raise ValueError('Invalid audit mode')
+    if mode == 'metadata':
+        metadata_only = True
+    if delay < 0:
+        raise ValueError("delay must be non-negative")
+    if sample < 1 or retries < 1:
+        raise ValueError("sample and retries must be positive")
+    if prepared is None:
+        title = with_retries(lambda: TitleProvider(client).get_title(reference), attempts=retries)
+        chapters = with_retries(lambda: ChapterProvider(client).get_chapters(title.slug_url), attempts=retries)
+    else:
+        title, chapters = prepared
+    available = [t.branch_id for t in make_translations(tuple(chapters))]
+    if branch_id is not None and available and branch_id not in available:
+        raise ValueError(f"Branch {branch_id} not found; available: {available}")
+    if branch_id is None and len(available) == 1:
+        branch_id = available[0]
+    selected = [c for c in chapters if branch_id is None or any(b.branch_id == branch_id for b in c.branches)]
+    selected.sort(key=_order)
+    duplicates = Counter((c.volume, c.number) for c in selected)
+    result: dict[str, Any] = {
+        "title_id": title.id, "title": title.title, "slug_url": title.slug_url,
+        "metadata": {
+            "authors": list(title.authors),
+            "description_present": bool(title.description),
+            "cover_url_present": bool(title.cover_url),
+        },
+        "chapters_total": len(chapters), "chapters_selected": len(selected),
+        "available_branches": available, "selected_branch": branch_id,
+        "duplicate_coordinates": [{"volume": v, "number": n, "count": count}
+                                  for (v, n), count in duplicates.items() if count > 1],
+        "sampled": 0, "passed": 0, "failed": 0, "unverified": 0,
+        "node_types": {}, "mark_types": {}, "issues": [],
+        "status": "NOT_TESTED" if metadata_only else "COMPATIBLE",
+        "unverified_chapter_ids": [], "html_images": 0, "content_formats": {},
+        "check_images": check_images,
+    }
+    if len(available) > 1 and branch_id is None:
+        result["issues"].append("Multiple branches available: use --branch for a specific translation")
+        result["status"] = "INCONCLUSIVE"
+    if result["duplicate_coordinates"]:
+        result["issues"].append("Duplicate volume/chapter numbers in selected index")
+        result["status"] = "INCONCLUSIVE"
+    if not selected:
+        result["status"] = "INCOMPATIBLE"
+        result["issues"].append("No chapters in selected branch")
+        return result
+    if metadata_only:
+        return result
+    types: Counter = Counter()
+    marks: Counter = Counter()
+    inspected = selected if mode == 'full' else _sample_evenly(selected, sample)
+    result["audit_mode"] = "metadata" if metadata_only else (mode or "sample")
+    result["planned_chapter_ids"] = [chapter.id for chapter in inspected]
+    result["completed_chapter_ids"] = []
+    result["elapsed_seconds"] = 0.0
+    result["check_images"] = check_images
+    completed = set()
+    if resume_state is not None:
+        if (resume_state.get("title_id") != title.id
+                or resume_state.get("selected_branch") != branch_id
+                or resume_state.get("audit_mode") != result["audit_mode"]
+                or resume_state.get("planned_chapter_ids") != result["planned_chapter_ids"]
+                or resume_state.get("check_images", False) != check_images):
+            raise ValueError("Saved audit does not match title, branch or chapter index")
+        completed = set(resume_state.get("completed_chapter_ids", []))
+        retry_ids = set(resume_state.get("unverified_chapter_ids", []))
+        if not retry_ids.issubset(completed):
+            raise ValueError("Unverified chapter IDs are not completed chapters")
+        completed.difference_update(retry_ids)
+        if len(set(resume_state.get("completed_chapter_ids", []))) != len(resume_state.get("completed_chapter_ids", [])):
+            raise ValueError("Duplicate completed chapter IDs")
+        if not completed.issubset(set(result["planned_chapter_ids"])):
+            raise ValueError("Saved audit contains unknown chapter IDs")
+        keys = ("sampled", "passed", "failed", "unverified", "issues",
+                "node_types", "mark_types", "completed_chapter_ids", "elapsed_seconds",
+                "html_images", "content_formats")
+        result.update({key: resume_state[key] for key in keys if key in resume_state})
+        if result["sampled"] != len(resume_state.get("completed_chapter_ids", [])) or result["passed"] + result["failed"] + result["unverified"] != result["sampled"]:
+            raise ValueError("Saved audit counters do not match completed chapters")
+        result["completed_chapter_ids"] = [i for i in result["completed_chapter_ids"] if i not in retry_ids]
+        result["sampled"] -= len(retry_ids)
+        result["unverified"] -= len(retry_ids)
+        if retry_ids:
+            result["issues"] = [issue for issue in result["issues"] if not any(issue.startswith(f"Chapter {c.volume}/{c.number}: unavailable") for c in inspected if c.id in retry_ids)]
+        result["unverified_chapter_ids"] = []
+        if result["sampled"] != len(completed) or result["passed"] + result["failed"] + result["unverified"] != len(completed):
+            raise ValueError("Saved audit counters do not match completed chapters")
+        types.update(result["node_types"])
+        marks.update(result["mark_types"])
+    started = time.monotonic()
+    processed_new = 0
+    for index, chapter in enumerate(inspected):
+        if chapter.id in completed:
+            continue
+        if processed_new and delay:
+            time.sleep(delay)
+        processed_new += 1
+        result["sampled"] += 1
+        coordinate = f"{chapter.volume}/{chapter.number}"
+        try:
+            content = with_retries(lambda: ChapterContentProvider(client).get_chapter(
+                title.slug_url, volume=chapter.volume, number=chapter.number,
+                branch_id=branch_id), attempts=retries)
+            if getattr(content, "unavailable_reason", None):
+                raise ChapterContentUnavailable(content.unavailable_reason)
+            if not isinstance(content.content, (dict, str)):
+                raise ValueError(f"Unsupported content format: {type(content.content).__name__}")
+            attachments = list((getattr(content, "data", None) or {}).get("attachments") or [])
+            image_document = content.content
+            html_sources = {}
+            if isinstance(content.content, dict):
+                _inspect(content.content, types, marks)
+                refs = image_refs(content.content)
+                result["content_formats"]["structured"] = result["content_formats"].get("structured", 0) + 1
+            else:
+                html_sources, refs = resolve_html_images(content.content, attachments)
+                image_document = {"type": "doc", "content": [
+                    {"type": "image", "attrs": {"images": [{"image": uid}]}}
+                    for uid in refs
+                ]}
+                result["content_formats"]["html"] = result["content_formats"].get("html", 0) + 1
+                result["html_images"] += len(html_sources)
+            if check_images:
+                media = load_images(
+                    image_document, attachments, Path(image_cache_dir) / str(title.id),
+                    int(getattr(content, "data", {}).get("id") or chapter.id),
+                )
+                paths = {uid: value[0] for uid, value in media.items()}
+            else:
+                by_name = {a.get("name"): a for a in attachments if isinstance(a, dict)}
+                paths = {}
+                for uid in refs:
+                    attachment = by_name.get(uid)
+                    if attachment is None:
+                        raise ValueError(f"Missing attachment for image: {uid}")
+                    ext = str(attachment.get("extension") or "").lower().lstrip(".")
+                    if ext not in FORMATS:
+                        raise ValueError(f"Unsupported attachment type: {uid}")
+                    path = str(attachment.get("originalUrl") or attachment.get("url") or "")
+                    parsed = urlsplit(path)
+                    if (parsed.scheme or parsed.netloc or not path.startswith("/uploads/ranobe/")
+                            or ".." in parsed.path.split("/") or parsed.query or parsed.fragment
+                            or parsed.path != path):
+                        raise ValueError(f"Invalid attachment path: {uid}")
+                    if not valid_image_identifier(uid):
+                        raise ValueError(f"Invalid image identifier: {uid}")
+                    paths[uid] = f"images/{uid}.{ext}"
+            html_paths = {src: paths[uid] for src, uid in html_sources.items()}
+            chapter_to_xhtml(content.title or chapter.name or coordinate,
+                             content.content, images=paths, html_images=html_paths)
+            result["passed"] += 1
+        except ChapterContentUnavailable as exc:
+            result["unverified"] += 1
+            result["unverified_chapter_ids"].append(chapter.id)
+            result["issues"].append(f"Chapter {coordinate}: unavailable ({exc.reason})")
+        except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.NetworkError) as exc:
+            result['unverified'] += 1
+            result['unverified_chapter_ids'].append(chapter.id)
+            result['issues'].append(f'Chapter {coordinate}: unavailable ({type(exc).__name__}: {exc})')
+        except Exception as exc:
+            # Preserve partial audit results; do not expose full server payloads.
+            result["failed"] += 1
+            result["issues"].append(f"Chapter {coordinate}: {type(exc).__name__}: {exc}")
+        result["completed_chapter_ids"].append(chapter.id)
+        result["node_types"] = dict(sorted(types.items()))
+        result["mark_types"] = dict(sorted(marks.items()))
+        result["elapsed_seconds"] = float((resume_state or {}).get("elapsed_seconds", 0)) + time.monotonic() - started
+        if progress:
+            result["status"] = "IN_PROGRESS" if result["sampled"] < len(inspected) else result["status"]
+            progress(result, result["sampled"], len(inspected))
+    result["node_types"] = dict(sorted(types.items()))
+    result["mark_types"] = dict(sorted(marks.items()))
+    if result["failed"]:
+        result["status"] = "INCOMPATIBLE"
+    elif result["unverified"] or (len(available) > 1 and branch_id is None) or result["duplicate_coordinates"]:
+        result["status"] = "INCONCLUSIVE"
+    else:
+        result["status"] = "COMPATIBLE"
+    return result

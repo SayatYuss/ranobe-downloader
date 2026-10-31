@@ -8,10 +8,13 @@ class LibSocialClient:
         headers = {
             "Site-Id": "3",
             "Accept": "application/json",
+            "Origin": "https://ranobelib.me",
+            "Referer": "https://ranobelib.me/",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/156.0 Safari/537.36",
         }
 
         if token:
-            headers["Authorization"] = f"Bearer {token}"
+            headers["Authorization"] = f"Bearer {token.removeprefix('Bearer ').strip()}"
 
         self._client = httpx.Client(
             base_url=self.BASE_URL,

@@ -1,7 +1,7 @@
 """Minimal EPUB 3 exporter (stdlib only): metadata, navigation, and XHTML chapters."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from core.download.models import NormalizedChapter
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -10,10 +10,8 @@ from xml.etree import ElementTree
 from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 
 
-@dataclass(frozen=True)
-class EpubChapter:
-    title: str
-    xhtml: str
+# Backward-compatible public name for callers using the original EPUB model.
+EpubChapter = NormalizedChapter
 
 
 class EpubExporter:
@@ -39,6 +37,23 @@ class EpubExporter:
             if root.tag != "{http://www.w3.org/1999/xhtml}html":
                 raise ValueError("Each chapter must be a valid XHTML document")
 
+        image_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+        media_items = {}
+        for chapter in chapters:
+            for href, payload, media_type in chapter.images:
+                if not href.startswith("images/") or ".." in Path(href).parts or not payload or media_type not in image_types:
+                    raise ValueError("Invalid EPUB chapter image")
+                if href in media_items and media_items[href] != (payload, media_type):
+                    raise ValueError("Conflicting EPUB chapter image paths")
+                media_items[href] = (payload, media_type)
+            for element in ElementTree.fromstring(chapter.xhtml).iter():
+                if element.tag == "{http://www.w3.org/1999/xhtml}img":
+                    if element.attrib.get("src") not in media_items and not any(
+                        element.attrib.get("src") == resource[0]
+                        for current in chapters for resource in current.images
+                    ):
+                        raise ValueError("XHTML image not found in EPUB resources")
+
         cover_types = {"image/jpeg": "jpg", "image/png": "png"}
         if cover is not None and (not cover or cover_media_type not in cover_types):
             raise ValueError("Cover must be a nonempty JPEG or PNG image")
@@ -55,6 +70,9 @@ class EpubExporter:
             items.append(f'<item id="c{index}" href="{filename}" media-type="application/xhtml+xml"/>')
             spine.append(f'<itemref idref="c{index}"/>')
             navigation.append(f'<li><a href="{filename}">{e(chapter.title)}</a></li>')
+
+        for image_index, (href, (_, media_type)) in enumerate(sorted(media_items.items()), 1):
+            items.append(f'<item id="img{image_index}" href="{e(href)}" media-type="{e(media_type)}"/>')
 
         modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         creators = "".join(f"<dc:creator>{e(author)}</dc:creator>" for author in authors)
@@ -94,6 +112,8 @@ class EpubExporter:
             archive.writestr("OEBPS/nav.xhtml", nav, compress_type=ZIP_DEFLATED)
             if cover_file is not None:
                 archive.writestr(f"OEBPS/{cover_file}", cover, compress_type=ZIP_DEFLATED)
+            for href, (payload, _) in sorted(media_items.items()):
+                archive.writestr(f"OEBPS/{href}", payload, compress_type=ZIP_DEFLATED)
             for index, chapter in enumerate(chapters, 1):
                 archive.writestr(
                     f"OEBPS/chapter-{index:04}.xhtml",

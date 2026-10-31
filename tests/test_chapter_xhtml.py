@@ -21,9 +21,10 @@ class XhtmlTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             chapter_to_xhtml('Title', {'type': 'image', 'attrs': {'src': 'https://example.org'}})
 
-    def test_html_is_not_silently_converted(self):
-        with self.assertRaises(ValueError):
-            chapter_to_xhtml('Title', '<p>HTML</p>')
+    def test_html_is_converted_to_xhtml(self):
+        out = chapter_to_xhtml('Title', '<p>HTML &amp; text</p>')
+        ElementTree.fromstring(out)
+        self.assertIn('<p>HTML &amp; text</p>', out)
 
 
 if __name__ == '__main__':

@@ -31,7 +31,7 @@ class ChapterCheckpoint:
     def _valid(data: object, *, volume: str, number: str) -> bool:
         return (
             isinstance(data, dict)
-            and isinstance(data.get("content"), dict)
+            and isinstance(data.get("content"), (dict, str))
             and str(data.get("volume")) == str(volume)
             and str(data.get("number")) == str(number)
         )
