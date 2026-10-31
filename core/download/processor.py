@@ -8,7 +8,7 @@ from core.chapter_content import ChapterContent, ChapterContentUnavailable
 from core.chapter_xhtml import chapter_to_xhtml
 from core.download.html_images import resolve_html_images
 from core.download.images import load_images
-from exporters.epub import EpubChapter
+from core.download.models import NormalizedChapter
 
 
 class ContentProcessor:
@@ -16,7 +16,7 @@ class ContentProcessor:
                 status: Callable[[str], None] | None = None,
                 image_mode: str = "original", image_quality: int = 85,
                 image_max_width: int = 1600,
-                image_stats: Callable[[int, int], None] | None = None) -> EpubChapter:
+                image_stats: Callable[[int, int], None] | None = None) -> NormalizedChapter:
         reason = ChapterContent.from_api(data).unavailable_reason
         if reason:
             raise ChapterContentUnavailable(f"Chapter {item.volume}/{item.number}: {reason}")
@@ -42,7 +42,7 @@ class ContentProcessor:
         )
         paths = {uid: image[0] for uid, image in media.items()}
         html_paths = {src: paths[uid] for src, uid in html_sources.items()}
-        return EpubChapter(
+        return NormalizedChapter(
             label, chapter_to_xhtml(label, content, images=paths, html_images=html_paths),
             images=tuple(media.values()),
         )
