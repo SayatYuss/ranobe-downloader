@@ -36,6 +36,6 @@ py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "providers*", "exporters*", "interfaces*"]
+include = ["core*", "providers*", "exporters*", "interfaces*", "ranobe_downloader*"]
 namespaces = true
 exclude = ["tests*"]
