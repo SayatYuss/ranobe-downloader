@@ -26,29 +26,29 @@ class ResumeTests(unittest.TestCase):
     def test_checkpoint_reloads_and_rejects_corruption(self):
         with tempfile.TemporaryDirectory() as temp:
             cache = ChapterCheckpoint(temp, 7, 10)
-            self.assertIsNone(cache.load(1))
-            cache.save(1, {"id": 1, "content": DOC})
+            self.assertIsNone(cache.load(1, volume="1", number="1"))
+            cache.save(1, {"id": 999, "volume": "1", "number": "1", "content": DOC}, volume="1", number="1")
             self.assertEqual(cache.load(1)["content"], DOC)
             cache.path(1).write_text("broken JSON", encoding="utf-8")
             self.assertIsNone(cache.load(1))
             with self.assertRaises(ValueError):
-                cache.save(1, {"id": 2, "content": DOC})
+                cache.save(1, {"id": 2, "volume": "1", "number": "999", "content": DOC}, volume="1", number="1")
 
     def test_resume_downloads_only_missing_chapters(self):
         with tempfile.TemporaryDirectory() as temp:
             cache = ChapterCheckpoint(temp, 7, 10)
-            cache.save(1, {"id": 1, "name": "Cached", "content": DOC})
+            cache.save(1, {"id": 999, "volume": "1", "number": "1", "name": "Cached", "content": DOC}, volume="1", number="1")
             downloader = BookDownloader(Mock(), Mock())
             downloader.titles.get_title = Mock(return_value=SimpleNamespace(
                 id=7, slug_url="7--book", title="Book", authors=(), description=""))
             downloader.chapters.get_chapters = Mock(return_value=[make_chapter(1), make_chapter(2)])
             downloader.contents.get_chapter = Mock(return_value=SimpleNamespace(
-                data={"id": 2, "name": "New", "content": DOC}, content=DOC))
+                data={"id": 888, "volume": "1", "number": "2", "name": "New", "content": DOC}, content=DOC))
             downloader.download("7", Path(temp) / "book.epub", branch_id=10,
                                 resume=True, cache_dir=temp, delay=0)
             downloader.contents.get_chapter.assert_called_once_with(
                 "7--book", volume="1", number="2", branch_id=10)
-            self.assertIsNotNone(cache.load(2))
+            self.assertIsNotNone(cache.load(2, volume="1", number="2"))
             chapters = downloader.exporter.export.call_args.kwargs["chapters"]
             self.assertEqual([chapter.title for chapter in chapters], ["Cached", "New"])
 
