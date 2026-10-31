@@ -32,7 +32,7 @@ def _format_size(value: int) -> str:
 
 
 def _print_summary(stats) -> None:
-    print('\\nDownload summary:')
+    print('\nDownload summary:')
     print(f'  Chapters: {stats.chapters} ({stats.cached_chapters} from cache)')
     print(f'  Images: {stats.images}')
     print(f'  Original images: {_format_size(stats.original_image_bytes)}')
