@@ -67,7 +67,7 @@ class BookDownloader:
         rendered = []
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
         for index, item in enumerate(selected, 1):
-            data = checkpoints.load(item.id) if resume else None
+            data = checkpoints.load(item.id, volume=item.volume, number=item.number) if resume else None
             if data is None:
                 raw = with_retries(
                     lambda: self.contents.get_chapter(
@@ -78,7 +78,7 @@ class BookDownloader:
                 data = raw.data
                 if not isinstance(raw.content, dict):
                     raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
-                checkpoints.save(item.id, data)
+                checkpoints.save(item.id, data, volume=item.volume, number=item.number)
                 if delay > 0 and index < len(selected):
                     time.sleep(delay)
             content = data.get('content')
