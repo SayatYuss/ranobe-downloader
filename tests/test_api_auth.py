@@ -50,3 +50,30 @@ class ApiAuthTests(unittest.TestCase):
             cls.return_value.__enter__.return_value.get_current_user.side_effect = error
             auth.status()
             self.assertIn("403", output.call_args.args[0])
+
+    def test_audit_resume_without_json(self):
+        import argparse
+        from pathlib import Path
+        from interfaces.cli.audit import configure_parser, execute
+        parser = argparse.ArgumentParser()
+        configure_parser(parser)
+        args = parser.parse_args(["271947--test", "--resume"])
+        self.assertIsNone(args.json)
+        with patch("interfaces.cli.audit.LibSocialClient") as client, patch(
+            "interfaces.cli.audit.TitleProvider"
+        ) as title, patch("interfaces.cli.audit.ChapterProvider") as chapters, patch(
+            "interfaces.cli.audit.audit_title"
+        ) as audit, patch("interfaces.cli.audit.Path.is_file", return_value=False):
+            title.return_value.get_title.return_value = MagicMock(
+                slug_url="271947--test", title="Test")
+            chapters.return_value.get_chapters.return_value = []
+            audit.return_value = {"title": "Test", "slug_url": "271947--test",
+                                  "selected_branch": None, "status": "COMPATIBLE",
+                                  "chapters_total": 0, "sampled": 0, "passed": 0,
+                                  "failed": 0, "unverified": 0,
+                                  "available_branches": [], "node_types": {},
+                                  "issues": []}
+            with __import__("tempfile").TemporaryDirectory() as directory:
+                args.output_dir = Path(directory)
+                execute(args)
+            audit.assert_called_once()
