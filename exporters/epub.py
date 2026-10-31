@@ -27,6 +27,8 @@ class EpubExporter:
         language: str = "ru",
         identifier: str | None = None,
         description: str = "",
+        cover: bytes | None = None,
+        cover_media_type: str | None = None,
     ) -> Path:
         if not title.strip() or not chapters:
             raise ValueError("A title and at least one chapter are required")
@@ -37,6 +39,9 @@ class EpubExporter:
             if root.tag != "{http://www.w3.org/1999/xhtml}html":
                 raise ValueError("Each chapter must be a valid XHTML document")
 
+        cover_types = {"image/jpeg": "jpg", "image/png": "png"}
+        if cover is not None and (not cover or cover_media_type not in cover_types):
+            raise ValueError("Cover must be a nonempty JPEG or PNG image")
         destination = Path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         book_id = identifier or f"urn:uuid:{uuid4()}"
@@ -54,6 +59,11 @@ class EpubExporter:
         modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         creators = "".join(f"<dc:creator>{e(author)}</dc:creator>" for author in authors)
         synopsis = f"<dc:description>{e(description)}</dc:description>" if description else ""
+        cover_file = f"cover.{cover_types[cover_media_type]}" if cover is not None else None
+        cover_item = (
+            f'<item id="cover" href="{cover_file}" media-type="{cover_media_type}" properties="cover-image"/>'
+            if cover_file else ""
+        )
         opf = (
             '<?xml version="1.0" encoding="utf-8"?>'
             '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">'
@@ -62,7 +72,7 @@ class EpubExporter:
             f'<dc:title>{e(title)}</dc:title><dc:language>{e(language)}</dc:language>'
             f'{creators}{synopsis}<meta property="dcterms:modified">{modified}</meta></metadata><manifest>'
             '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
-            f'{"".join(items)}</manifest><spine>{"".join(spine)}</spine></package>'
+            f'{cover_item}{"".join(items)}</manifest><spine>{"".join(spine)}</spine></package>'
         )
         nav = (
             '<?xml version="1.0" encoding="utf-8"?>'
@@ -82,6 +92,8 @@ class EpubExporter:
             archive.writestr("META-INF/container.xml", container, compress_type=ZIP_DEFLATED)
             archive.writestr("OEBPS/package.opf", opf, compress_type=ZIP_DEFLATED)
             archive.writestr("OEBPS/nav.xhtml", nav, compress_type=ZIP_DEFLATED)
+            if cover_file is not None:
+                archive.writestr(f"OEBPS/{cover_file}", cover, compress_type=ZIP_DEFLATED)
             for index, chapter in enumerate(chapters, 1):
                 archive.writestr(
                     f"OEBPS/chapter-{index:04}.xhtml",
