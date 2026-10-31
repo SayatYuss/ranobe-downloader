@@ -112,7 +112,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
                         raise ValueError(f"Missing attachment for image: {uid}")
                     if str(attached.get("extension", "")).lower().lstrip(".") not in FORMATS:
                         raise ValueError(f"Unsupported attachment type: {uid}")
-                    images[uid] = f"images/{uid}.gif"
+                    images[uid] = f"images/{uid}.{str(attached.get('extension')).lower().lstrip('.')}"
             chapter_to_xhtml(content.title or chapter.name or coordinate,
                              content.content, images=images)
             result["passed"] += 1
