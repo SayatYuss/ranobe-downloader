@@ -12,6 +12,7 @@ from core.download.plan import DownloadPlan, make_translations
 from pathlib import Path
 from typing import Callable
 
+from core.chapter_content import ChapterContentUnavailable
 from exporters.epub import EpubExporter
 from providers.libsocial.chapter_content import ChapterContentProvider
 from providers.libsocial.chapters import ChapterProvider
@@ -99,6 +100,7 @@ class BookDownloader:
         original_image_bytes = 0
         embedded_image_bytes = 0
         cached_chapters = 0
+        skipped_paid = []
 
         def record_image(original_size: int, embedded_size: int) -> None:
             nonlocal image_count, original_image_bytes, embedded_image_bytes
@@ -112,9 +114,19 @@ class BookDownloader:
         for index, item in enumerate(selected, 1):
             if status:
                 status(f'[{index}/{len(selected)}] Loading chapter {item.volume}/{item.number}...')
-            data, from_cache = fetcher.fetch(
-                title.slug_url, item, branch_id=branch_id, resume=resume, retries=retries,
-            )
+            try:
+                data, from_cache = fetcher.fetch(
+                    title.slug_url, item, branch_id=branch_id, resume=resume, retries=retries,
+                )
+            except ChapterContentUnavailable as exc:
+                if "paid_content" not in str(exc):
+                    raise
+                skipped_paid.append(f"{item.volume}/{item.number} — {item.name or 'Без названия'}")
+                if status:
+                    status(f"Skipped paid chapter {item.volume}/{item.number}: no access")
+                if progress is not None:
+                    progress(index, len(selected), f"SKIPPED (paid): {item.volume}/{item.number}")
+                continue
             if from_cache:
                 cached_chapters += 1
             elif delay > 0 and index < len(selected):
@@ -128,8 +140,10 @@ class BookDownloader:
             if progress is not None:
                 progress(index, len(selected), chapter.title)
 
+        if not rendered:
+            raise ValueError('No accessible chapters to export')
         if status:
-            status('Building EPUB...')
+            status('Building output...')
         cover = None
         cover_type = None
         cover_url = getattr(title, 'cover_url', None)
@@ -153,5 +167,6 @@ class BookDownloader:
                 embedded_image_bytes=embedded_image_bytes,
                 epub_bytes=output_path.stat().st_size if output_path.is_file() else 0,
                 cached_chapters=cached_chapters,
+                skipped_paid_chapters=tuple(skipped_paid),
             ))
         return result
