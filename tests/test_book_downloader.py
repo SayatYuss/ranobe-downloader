@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -7,19 +8,22 @@ from core.book_downloader import BookDownloader
 
 def chapter(number, branches):
     return SimpleNamespace(volume='1', number=str(number), name=f'Chapter {number}',
-                           branches=[SimpleNamespace(branch_id=b) for b in branches], index=None)
+                           branches=[SimpleNamespace(branch_id=b) for b in branches], index=None,
+                           id=int(number))
 
 
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
         self.exporter = Mock()
         self.exporter.export.return_value = 'book.epub'
         self.downloader = BookDownloader(Mock(), self.exporter)
         self.downloader.titles.get_title = Mock(return_value=SimpleNamespace(
             id=7, slug_url='7--example', title='Book', authors=('Author',), description='Summary'))
         self.downloader.contents.get_chapter = Mock(return_value=SimpleNamespace(
-            title='One', content={'type': 'doc', 'content': [
-                {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hello'}]}]}))
+            data={'id': 2, 'name': 'One', 'content': {'type': 'doc', 'content': [
+                {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hello'}]}]}}))
 
     def test_ambiguous_branch_fails_before_download(self):
         self.downloader.chapters.get_chapters = Mock(return_value=[chapter(1, [10, 20])])
@@ -29,7 +33,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_sorted_and_limited(self):
         self.downloader.chapters.get_chapters = Mock(return_value=[chapter(10, [10]), chapter(2, [10])])
-        self.assertEqual(self.downloader.download('7', 'book.epub', branch_id=10, limit=1), 'book.epub')
+        self.assertEqual(self.downloader.download('7', 'book.epub', branch_id=10, limit=1, cache_dir=self.temp.name, delay=0), 'book.epub')
         self.downloader.contents.get_chapter.assert_called_once_with(
             '7--example', volume='1', number='2', branch_id=10)
         self.assertEqual(len(self.exporter.export.call_args.kwargs['chapters']), 1)
