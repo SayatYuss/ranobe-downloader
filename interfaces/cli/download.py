@@ -17,6 +17,12 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--resume', action='store_true', help='Reuse verified cached chapters')
     parser.add_argument('--cache-dir', type=Path, default=Path('output/.cache'))
     parser.add_argument('--delay', type=float, default=1.0, help='Seconds between downloads')
+    parser.add_argument('--image-mode', choices=('original', 'optimized'), default='original',
+                        help='Image encoding inside EPUB (default: original)')
+    parser.add_argument('--image-quality', type=int, default=85,
+                        help='JPEG quality in optimized mode (default: 85)')
+    parser.add_argument('--image-max-width', type=int, default=1600,
+                        help='Max width of optimized PNG images (default: 1600)')
     parser.add_argument('--retries', type=int, default=5, help='Maximum attempts per chapter')
 
 
@@ -38,6 +44,9 @@ def execute(args: argparse.Namespace) -> None:
                                          progress=report, resume=args.resume,
                                          cache_dir=args.cache_dir, delay=args.delay,
                                          retries=args.retries,
+                                         image_mode=args.image_mode,
+                                         image_quality=args.image_quality,
+                                         image_max_width=args.image_max_width,
                                          status=lambda message: print(message, flush=True))
         print(f'Saved: {result}')
     except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as exc:
