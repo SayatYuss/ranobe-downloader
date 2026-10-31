@@ -12,7 +12,15 @@ def download_cover(url: str) -> tuple[bytes, str]:
         raise ValueError("Cover URL must use the trusted HTTPS image host")
     if not address.path.startswith("/uploads/"):
         raise ValueError("Unexpected cover path")
-    with httpx.Client(timeout=20, follow_redirects=False) as client:
+    headers = {
+        "Referer": "https://ranobelib.me/",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+    with httpx.Client(timeout=20, follow_redirects=False, headers=headers) as client:
         with client.stream("GET", url) as response:
             response.raise_for_status()
             if response.is_redirect:
