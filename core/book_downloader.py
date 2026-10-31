@@ -14,6 +14,7 @@ from typing import Callable
 
 from core.chapter_content import ChapterContentUnavailable
 from exporters.epub import EpubExporter
+from exporters.text import TxtExporter
 import httpx
 
 
@@ -118,6 +119,7 @@ class BookDownloader:
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
         fetcher = ChapterFetcher(self.contents, checkpoints)
         processor = ContentProcessor(media=self.media)
+        skip_images = isinstance(self.exporter, TxtExporter)
         image_cache = Path(cache_dir) / str(title.id) / f"branch-{branch_id if branch_id is not None else 'default'}"
         for index, item in enumerate(selected, 1):
             if status:
@@ -143,6 +145,7 @@ class BookDownloader:
                 data, item, image_cache, status=status,
                 image_mode=image_mode, image_quality=image_quality,
                 image_max_width=image_max_width, image_stats=record_image,
+                skip_images=skip_images,
             )
             rendered.append(chapter)
             if progress is not None:
@@ -155,7 +158,7 @@ class BookDownloader:
         cover = None
         cover_type = None
         cover_url = getattr(title, 'cover_url', None)
-        if cover_url and self.cover_downloader is not None:
+        if not skip_images and cover_url and self.cover_downloader is not None:
             try:
                 cover, cover_type = self.cover_downloader(cover_url)
             except (httpx.HTTPError, ValueError) as exc:
