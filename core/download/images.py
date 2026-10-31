@@ -71,7 +71,7 @@ def _legacy_media(attachment):
 
 def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None,
                 image_mode='original', image_quality=85, image_max_width=1600,
-                image_stats=None, fetch_media=None):
+                image_stats=None, fetch_media=None, validate_attachment=None):
     """Return UUID -> (EPUB path, bytes, mime). Download referenced attachments only."""
     if image_mode not in ('original', 'optimized'):
         raise ValueError('image_mode must be original or optimized')
@@ -90,6 +90,11 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             raise ValueError(f"Unsupported image extension: {ext}")
         mime = FORMATS[ext]
         path = str(attachment.get("originalUrl") or attachment.get("url") or "")
+        if validate_attachment is None:
+            from providers.libsocial.media_policy import attachment_path
+            attachment_path(path)
+        else:
+            validate_attachment(path)
         filename = f"{uid}.{ext}"
         if not valid_image_identifier(uid):
             raise ValueError("Invalid image identifier")
