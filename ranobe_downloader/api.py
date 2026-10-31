@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+import re
+import httpx
+from .errors import translate_http_error
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -54,7 +58,12 @@ class Downloader:
                  status: Callable[[str], None] | None = None) -> Book:
         """Fetch metadata and the chapter index without downloading content."""
         self._ensure_open()
-        plan = self._backend.prepare(reference, status=status)
+        if not isinstance(reference, str) or not reference.strip():
+            raise ValueError("reference must be a nonempty string")
+        try:
+            plan = self._backend.prepare(reference, status=status)
+        except httpx.HTTPError as exc:
+            raise translate_http_error(exc) from exc
         title = plan.title
         return Book(
             title=title.title, id=title.id, slug_url=title.slug_url,
@@ -77,10 +86,23 @@ class Downloader:
             raise ValueError("format must be epub, txt or html")
         if not isinstance(book, (Book, str)):
             raise TypeError("book must be Book or a reference string")
+        if limit is not None and (type(limit) is not int or limit < 1):
+            raise ValueError("limit must be a positive integer")
+        if branch_id is not None and type(branch_id) is not int:
+            raise TypeError("branch_id must be an integer")
+        if not isinstance(delay, (float, int)) or not math.isfinite(delay) or delay < 0:
+            raise ValueError("delay must be a finite non-negative number")
+        if type(retries) is not int or retries < 1:
+            raise ValueError("retries must be a positive integer")
+        if image_mode not in ("original", "optimized"):
+            raise ValueError("image_mode must be original or optimized")
+        if type(image_quality) is not int or not 1 <= image_quality <= 100:
+            raise ValueError("image_quality must be between 1 and 100")
+        if type(image_max_width) is not int or image_max_width < 1:
+            raise ValueError("image_max_width must be a positive integer")
         if isinstance(book, str):
             book = self.get_book(book, status=status)
         if output is None:
-            import re
             if not re.fullmatch(r"[A-Za-z0-9_-]+", book.slug_url):
                 raise ValueError("Unsafe book slug for output filename")
             suffix = str(branch_id) if branch_id is not None else "default"
@@ -90,13 +112,16 @@ class Downloader:
         previous = self._backend.exporter
         try:
             self._backend.exporter = _EXPORTERS[format]()
-            return self._backend.download(
+            try:
+                return self._backend.download(
                 book._plan, output, branch_id=branch_id, limit=limit,
                 progress=progress, resume=resume, cache_dir=cache_dir,
                 delay=delay, retries=retries, status=status,
                 image_mode=image_mode, image_quality=image_quality,
                 image_max_width=image_max_width, statistics=statistics,
-            )
+                )
+            except httpx.HTTPError as exc:
+                raise translate_http_error(exc) from exc
         finally:
             self._backend.exporter = previous
 
