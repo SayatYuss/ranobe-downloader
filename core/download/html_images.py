@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
+import re
 from urllib.parse import urlsplit
 
-from core.download.images import HOSTS
+from core.download.images import HOSTS, FORMATS
 
 
 def _image_path(src: str) -> str:
@@ -68,6 +69,19 @@ def resolve_html_images(html: str, attachments) -> tuple[dict[str, str], list[st
         path = _image_path(src)
         uid = lookup.get(path)
         if uid is None:
-            raise ValueError(f"HTML image attachment missing: {path}")
+            match = re.fullmatch(
+                r"/uploads/ranobe/\\d+/chapters/\\d+/([0-9a-fA-F-]{36})\\.([A-Za-z]+)",
+                path,
+            )
+            if match is None or match.group(2).lower() not in FORMATS:
+                raise ValueError(f"HTML image attachment missing: {path}")
+            uid = match.group(1)
+            if not isinstance(attachments, list):
+                raise ValueError("HTML attachments must be a mutable list")
+            attachments.append({
+                "name": uid, "extension": match.group(2).lower(),
+                "originalUrl": path,
+            })
+            lookup[path] = uid
         matched[src] = uid
     return matched, list(dict.fromkeys(matched.values()))
