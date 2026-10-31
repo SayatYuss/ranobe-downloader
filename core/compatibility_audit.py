@@ -181,6 +181,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
         result["mark_types"] = dict(sorted(marks.items()))
         result["elapsed_seconds"] = float((resume_state or {}).get("elapsed_seconds", 0)) + time.monotonic() - started
         if progress:
+            result["status"] = "IN_PROGRESS" if result["sampled"] < len(inspected) else result["status"]
             progress(result, result["sampled"], len(inspected))
     result["node_types"] = dict(sorted(types.items()))
     result["mark_types"] = dict(sorted(marks.items()))
