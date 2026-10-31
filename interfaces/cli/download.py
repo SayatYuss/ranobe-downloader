@@ -23,7 +23,22 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
                         help='JPEG quality for optimized PNGs, 1-100 (default: 85)')
     parser.add_argument('--image-max-width', type=int, default=1600,
                         help='Max width when converting PNGs, in pixels (default: 1600)')
+    parser.add_argument('--verbose', action='store_true', help='Show per-image download details')
     parser.add_argument('--retries', type=int, default=5, help='Maximum attempts per chapter')
+
+
+def _format_size(value: int) -> str:
+    return f'{value / (1024 * 1024):.2f} MiB'
+
+
+def _print_summary(stats) -> None:
+    print('\nDownload summary:')
+    print(f'  Chapters: {stats.chapters} ({stats.cached_chapters} from cache)')
+    print(f'  Images: {stats.images}')
+    print(f'  Original images: {_format_size(stats.original_image_bytes)}')
+    print(f'  Embedded images: {_format_size(stats.embedded_image_bytes)}')
+    print(f'  Image savings: {_format_size(stats.saved_image_bytes)} ({stats.saved_image_percent:.1f}%)')
+    print(f'  EPUB size: {_format_size(stats.epub_bytes)}', flush=True)
 
 
 def execute(args: argparse.Namespace) -> None:
@@ -31,7 +46,7 @@ def execute(args: argparse.Namespace) -> None:
         print('Connecting to RanobeLib...', flush=True)
         with LibSocialClient(KeyringTokenStorage().load()) as client:
             def report(current, total, chapter):
-                print(f'[{current}/{total}] {chapter}', flush=True)
+                print(f'[{current}/{total}] {current / total:.0%}  {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
             downloader = BookDownloader(client)
             title = downloader.titles.get_title(args.reference)
@@ -39,6 +54,11 @@ def execute(args: argparse.Namespace) -> None:
             target = args.output or Path('output') / f'{title.id}.epub'
             # Keep a single fetched title available for the workflow.
             downloader.titles.get_title = lambda reference: title
+            def report_status(message):
+                if args.verbose or not (message.startswith('  Downloading image ') or
+                                        (message.startswith('[') and 'Loading chapter' in message)):
+                    print(message, flush=True)
+
             result = downloader.download(args.reference, target,
                                          branch_id=args.branch, limit=args.limit,
                                          progress=report, resume=args.resume,
@@ -47,7 +67,8 @@ def execute(args: argparse.Namespace) -> None:
                                          image_mode=args.image_mode,
                                          image_quality=args.image_quality,
                                          image_max_width=args.image_max_width,
-                                         status=lambda message: print(message, flush=True))
+                                         status=report_status,
+                                         statistics=_print_summary)
         print(f'Saved: {result}')
     except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as exc:
         raise SystemExit(f'Download failed: {exc}') from exc

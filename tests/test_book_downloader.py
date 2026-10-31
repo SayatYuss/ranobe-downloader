@@ -46,6 +46,31 @@ class WorkflowTests(unittest.TestCase):
             self.downloader.download('7', 'book.epub', branch_id=10)
         self.exporter.export.assert_not_called()
 
+    def test_statistics_callback(self):
+        self.downloader.chapters.get_chapters = Mock(return_value=[chapter(2, [10])])
+        received = []
+        self.downloader.download(
+            '7', 'book.epub', branch_id=10, cache_dir=self.temp.name,
+            delay=0, statistics=received.append,
+        )
+        self.assertEqual(len(received), 1)
+        self.assertEqual(received[0].chapters, 1)
+        self.assertEqual(received[0].images, 0)
+        self.assertEqual(received[0].saved_image_percent, 0.0)
+        self.assertEqual(received[0].cached_chapters, 0)
+        self.assertEqual(received[0].epub_bytes, 0)
+
+    def test_no_statistics_on_failure(self):
+        self.downloader.chapters.get_chapters = Mock(return_value=[chapter(2, [10])])
+        self.downloader.contents.get_chapter = Mock(side_effect=ValueError('failure'))
+        received = []
+        with self.assertRaises(ValueError):
+            self.downloader.download(
+                '7', 'book.epub', branch_id=10, cache_dir=self.temp.name,
+                delay=0, statistics=received.append,
+            )
+        self.assertEqual(received, [])
+
 
 if __name__ == '__main__':
     unittest.main()
