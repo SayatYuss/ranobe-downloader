@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
 import httpx
+from core.download.image_optimization import optimize_image
 
 FORMATS = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
            "gif": "image/gif", "webp": "image/webp"}
@@ -60,8 +61,11 @@ def _fetch(url):
             return bytes(payload)
 
 
-def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None):
+def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None,
+                image_mode='original', image_quality=85, image_max_width=1600):
     """Return UUID -> (EPUB path, bytes, mime). Download referenced attachments only."""
+    if image_mode not in ('original', 'optimized'):
+        raise ValueError('image_mode must be original or optimized')
     refs = image_refs(document)
     if not refs:
         return {}
@@ -117,5 +121,9 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             finally:
                 if temp is not None:
                     temp.unlink(missing_ok=True)
-        result[uid] = (f"images/{chapter_id}-{filename}", data, mime)
+        output_ext = ext
+        if image_mode == 'optimized':
+            data, mime, output_ext = optimize_image(
+                data, mime, quality=image_quality, max_width=image_max_width)
+        result[uid] = (f"images/{chapter_id}-{uid}.{output_ext}", data, mime)
     return result
