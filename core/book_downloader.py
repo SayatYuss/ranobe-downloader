@@ -5,17 +5,14 @@ from decimal import Decimal, InvalidOperation
 import time
 
 from core.download.checkpoint import ChapterCheckpoint
-from core.download.retry import with_retries
-from core.download.images import load_images
-from core.download.html_images import resolve_html_images
+from core.download.fetcher import ChapterFetcher
+from core.download.processor import ContentProcessor
 from core.download.statistics import DownloadStatistics
 from core.download.plan import DownloadPlan, make_translations
 from pathlib import Path
 from typing import Callable
 
-from core.chapter_content import ChapterContent, ChapterContentUnavailable
-from core.chapter_xhtml import chapter_to_xhtml
-from exporters.epub import EpubChapter, EpubExporter
+from exporters.epub import EpubExporter
 from providers.libsocial.chapter_content import ChapterContentProvider
 from providers.libsocial.chapters import ChapterProvider
 from providers.libsocial.titles import TitleProvider
@@ -109,62 +106,27 @@ class BookDownloader:
             original_image_bytes += original_size
             embedded_image_bytes += embedded_size
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
+        fetcher = ChapterFetcher(self.contents, checkpoints)
+        processor = ContentProcessor()
         image_cache = Path(cache_dir) / str(title.id) / f"branch-{branch_id if branch_id is not None else 'default'}"
         for index, item in enumerate(selected, 1):
             if status:
                 status(f'[{index}/{len(selected)}] Loading chapter {item.volume}/{item.number}...')
-            data = checkpoints.load(item.id, volume=item.volume, number=item.number) if resume else None
-            if data is not None:
+            data, from_cache = fetcher.fetch(
+                title.slug_url, item, branch_id=branch_id, resume=resume, retries=retries,
+            )
+            if from_cache:
                 cached_chapters += 1
-            if data is None:
-                raw = with_retries(
-                    lambda: self.contents.get_chapter(
-                        title.slug_url, volume=item.volume,
-                        number=item.number, branch_id=branch_id),
-                    attempts=retries,
-                )
-                data = raw.data
-                unavailable_reason = ChapterContent.from_api(raw.data).unavailable_reason
-                if unavailable_reason:
-                    raise ChapterContentUnavailable(
-                        f"Chapter {item.volume}/{item.number}: {unavailable_reason}")
-                if not isinstance(raw.content, (dict, str)):
-                    raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
-                checkpoints.save(item.id, data, volume=item.volume, number=item.number)
-                if delay > 0 and index < len(selected):
-                    time.sleep(delay)
-            content = data.get('content')
-            unavailable_reason = ChapterContent.from_api(data).unavailable_reason
-            if unavailable_reason:
-                raise ChapterContentUnavailable(
-                    f"Chapter {item.volume}/{item.number}: {unavailable_reason}")
-            if not isinstance(content, (dict, str)):
-                raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
-            label = data.get('name') or item.name or f'Глава {item.number}'
-            html_sources = {}
-            attachments = list(data.get('attachments') or [])
-            if isinstance(content, str):
-                html_sources, uids = resolve_html_images(content, attachments)
-                image_document = {'type': 'doc', 'content': [
-                    {'type': 'image', 'attrs': {'images': [{'image': uid}]}}
-                    for uid in uids
-                ]}
-            else:
-                image_document = content
-            media = load_images(image_document, attachments, image_cache,
-                                int(data.get('id') or item.id), status=status,
-                                image_mode=image_mode, image_quality=image_quality,
-                                image_max_width=image_max_width,
-                                image_stats=record_image)
-            paths = {uid: image[0] for uid, image in media.items()}
-            html_paths = {src: paths[uid] for src, uid in html_sources.items()}
-            rendered.append(EpubChapter(
-                label, chapter_to_xhtml(label, content, images=paths,
-                                        html_images=html_paths),
-                images=tuple(media.values()),
-            ))
+            elif delay > 0 and index < len(selected):
+                time.sleep(delay)
+            chapter = processor.process(
+                data, item, image_cache, status=status,
+                image_mode=image_mode, image_quality=image_quality,
+                image_max_width=image_max_width, image_stats=record_image,
+            )
+            rendered.append(chapter)
             if progress is not None:
-                progress(index, len(selected), label)
+                progress(index, len(selected), chapter.title)
 
         if status:
             status('Building EPUB...')
