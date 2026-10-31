@@ -5,6 +5,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
+import time
+import httpx
 
 from core.chapter_xhtml import chapter_to_xhtml
 from core.download.images import image_refs, FORMATS
@@ -53,11 +55,14 @@ def _inspect(node: Any, types: Counter, marks: Counter) -> None:
 
 def audit_title(client, reference: str, *, sample: int = 10,
                 branch_id: int | None = None, metadata_only: bool = False,
-                retries: int = 3, mode: str | None = None) -> dict[str, Any]:
+                retries: int = 3, mode: str | None = None,
+                delay: float = 1.0) -> dict[str, Any]:
     if mode is not None and mode not in ('metadata', 'sample', 'full'):
         raise ValueError('Invalid audit mode')
     if mode == 'metadata':
         metadata_only = True
+    if delay < 0:
+        raise ValueError("delay must be non-negative")
     if sample < 1 or retries < 1:
         raise ValueError("sample and retries must be positive")
     title = with_retries(lambda: TitleProvider(client).get_title(reference), attempts=retries)
@@ -81,7 +86,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
         "available_branches": available, "selected_branch": branch_id,
         "duplicate_coordinates": [{"volume": v, "number": n, "count": count}
                                   for (v, n), count in duplicates.items() if count > 1],
-        "sampled": 0, "passed": 0, "failed": 0,
+        "sampled": 0, "passed": 0, "failed": 0, "unverified": 0,
         "node_types": {}, "mark_types": {}, "issues": [],
         "status": "NOT_TESTED" if metadata_only else "COMPATIBLE",
     }
@@ -99,7 +104,10 @@ def audit_title(client, reference: str, *, sample: int = 10,
         return result
     types: Counter = Counter()
     marks: Counter = Counter()
-    for chapter in (selected if mode == 'full' else _sample_evenly(selected, sample)):
+    inspected = selected if mode == 'full' else _sample_evenly(selected, sample)
+    for index, chapter in enumerate(inspected):
+        if index and delay:
+            time.sleep(delay)
         result["sampled"] += 1
         coordinate = f"{chapter.volume}/{chapter.number}"
         try:
@@ -131,6 +139,9 @@ def audit_title(client, reference: str, *, sample: int = 10,
             chapter_to_xhtml(content.title or chapter.name or coordinate,
                              content.content, images=images)
             result["passed"] += 1
+        except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.NetworkError) as exc:
+            result['unverified'] += 1
+            result['issues'].append(f'Chapter {coordinate}: unavailable ({type(exc).__name__}: {exc})')
         except Exception as exc:
             # Preserve partial audit results; do not expose full server payloads.
             result["failed"] += 1
@@ -139,6 +150,6 @@ def audit_title(client, reference: str, *, sample: int = 10,
     result["mark_types"] = dict(sorted(marks.items()))
     if result["failed"]:
         result["status"] = "INCOMPATIBLE"
-    elif (len(available) > 1 and branch_id is None) or result["duplicate_coordinates"]:
+    elif result["unverified"] or (len(available) > 1 and branch_id is None) or result["duplicate_coordinates"]:
         result["status"] = "INCONCLUSIVE"
     return result
