@@ -78,35 +78,33 @@ def execute(args):
     with LibSocialClient(KeyringTokenStorage().load()) as client:
         for reference in args.references:
             prepared = None
-            if args.all_branches:
-                try:
-                    title = with_retries(
+            try:
+                title = with_retries(
                         lambda: TitleProvider(client).get_title(reference),
                         attempts=args.retries)
-                    chapters = with_retries(
+                chapters = with_retries(
                         lambda: ChapterProvider(client).get_chapters(title.slug_url),
                         attempts=args.retries)
-                    branches = [t.branch_id for t in make_translations(tuple(chapters))]
-                    if not branches:
-                        branches = [None]
-                    prepared = (title, chapters)
-                except Exception as exc:
-                    error_report = {"reference": reference, "selected_branch": None,
+                available = [t.branch_id for t in make_translations(tuple(chapters))]
+                branches = (available or [None]) if args.all_branches else [args.branch]
+                prepared = (title, chapters)
+            except Exception as exc:
+                error_report = {"reference": reference, "selected_branch": None,
                                     "status": "ERROR", "issues": [f"{type(exc).__name__}: {exc}"]}
-                    reports.append(error_report)
-                    save_branch(error_report, reference, None)
-                    save_reports()
-                    print(f"{reference}: ERROR - {error_report['issues'][0]}")
-                    continue
-            else:
-                branches = [args.branch]
+                reports.append(error_report)
+                save_reports()
+                print(f"{reference}: ERROR - {error_report['issues'][0]}")
+                continue
 
             print(f"{reference}: checking {len(branches)} translation(s)", flush=True)
             for branch_id in branches:
                 title_slug = prepared[0].slug_url if prepared is not None else None
+                effective_branch = branch_id if branch_id is not None else (branches[0] if len(branches) == 1 else None)
+                if effective_branch is None and not args.all_branches and len(available) == 1:
+                    effective_branch = available[0]
                 previous = None
                 if args.resume:
-                    source = report_path(reference, branch_id, title_slug)
+                    source = report_path(reference, effective_branch, title_slug)
                     if source.is_file():
                         previous = json.loads(source.read_text(encoding="utf-8"))
                     else:
@@ -129,7 +127,7 @@ def execute(args):
                           f"unverified={state['unverified']} "
                           f"elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m", flush=True)
                     if current % args.save_every == 0 or current == total:
-                        save_branch(state, reference, branch_id, title_slug)
+                        save_branch(state, reference, state.get("selected_branch", effective_branch), title_slug)
                         save_reports()
 
                 try:
@@ -151,7 +149,7 @@ def execute(args):
                 report["reference"] = reference
                 if not any(r is report for r in reports):
                     reports.append(report)
-                saved_at = save_branch(report, reference, branch_id, title_slug)
+                saved_at = save_branch(report, reference, report.get("selected_branch", effective_branch), title_slug)
                 save_reports()
                 print(f"Report saved: {saved_at}")
                 label = report["status"]
