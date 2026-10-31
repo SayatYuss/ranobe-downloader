@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ranobe-downloader"
-version = "0.1.0a1"
-description = "RanobeLib command-line EPUB downloader"
+version = "0.2.0a1"
+description = "RanobeLib CLI downloader with EPUB, TXT, HTML and compatibility auditing"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
