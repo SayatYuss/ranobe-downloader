@@ -51,9 +51,9 @@ def execute(args: argparse.Namespace) -> None:
                 print(f'[{current}/{total}] {current / total:.0%}  {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
             downloader = BookDownloader(client)
-            title = downloader.titles.get_title(args.reference)
-            print(f'Title: {title.title}', flush=True)
-            target = args.output or Path('output') / f'{title.id}.epub'
+            plan = downloader.prepare(args.reference)
+            print(f'Title: {plan.title.title}', flush=True)
+            target = args.output or Path('output') / f'{plan.title.id}.epub'
             # Keep a single fetched title available for the workflow.
             downloader.titles.get_title = lambda reference: title
             def report_status(message):
