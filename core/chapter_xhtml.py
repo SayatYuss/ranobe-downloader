@@ -69,7 +69,7 @@ class _SafeHtml(HTMLParser):
             src = dict(attrs).get('src')
             href = self.html_images.get(src)
             if not href:
-                raise ValueError('HTML image attachment not resolved')
+                raise ValueError('HTML media requires attachment support: img (unresolved)')
             self.parts.append(f'<img src="{escape(href, quote=True)}" alt="" />')
         elif tag in {'video', 'audio', 'iframe', 'svg', 'picture'}:
             raise ValueError(f'HTML media requires attachment support: {tag}')
