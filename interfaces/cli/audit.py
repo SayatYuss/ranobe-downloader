@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import sys
+import re
 from pathlib import Path
 
 from core.auth.storage import KeyringTokenStorage
@@ -19,7 +20,7 @@ def configure_parser(parser):
     parser.add_argument("--mode", choices=("metadata", "sample", "full"), default="sample",
                         help="metadata=index only, sample=selected chapters, full=all selected chapters")
     parser.add_argument("--check-images", action="store_true", help="Download and validate referenced images (slower)")
-    parser.add_argument("--resume", action="store_true", help="Resume from existing --json report")
+    parser.add_argument("--resume", action="store_true", help="Resume from saved per-branch reports")
     parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N chapters (default: 10)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI status colors")
     parser.add_argument("--sample", type=int, default=10, help="Chapters sampled per title")
@@ -28,7 +29,9 @@ def configure_parser(parser):
     branch_group.add_argument("--all-branches", action="store_true", help="Audit every translation separately")
     parser.add_argument("--metadata-only", action="store_true",
                         help="Inspect metadata and chapter index without fetching chapter text")
-    parser.add_argument("--json", type=Path, metavar="PATH", help="Write JSON report")
+    parser.add_argument("--output-dir", type=Path, default=Path("output/audit"),
+                        help="Directory for individual slug_branch.json reports")
+    parser.add_argument("--json", type=Path, metavar="PATH", help="Optional combined JSON report")
     parser.add_argument("--delay", type=float, default=1.0, help="Seconds between chapter requests (default: 1)")
     parser.add_argument("--retries", type=int, default=3)
 
@@ -40,14 +43,26 @@ def execute(args):
         raise SystemExit("--sample and --retries must be positive")
     if args.save_every < 1:
         raise SystemExit("--save-every must be positive")
-    if args.resume and not args.json:
-        raise SystemExit("--resume requires --json PATH")
     reports = []
     saved_reports = []
     if args.resume and args.json.is_file():
         saved_reports = json.loads(args.json.read_text(encoding="utf-8"))
         if not isinstance(saved_reports, list):
             raise SystemExit("Invalid audit report format")
+
+    def report_path(reference, branch_id, slug=None):
+        name = (slug or reference).rstrip("/").rsplit("/", 1)[-1]
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise ValueError("Unsafe audit slug")
+        return args.output_dir / f"{name}_{branch_id if branch_id is not None else 'default'}.json"
+
+    def save_branch(state, reference, branch_id, slug=None):
+        target = report_path(reference, branch_id, slug or state.get("slug_url"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        pending = target.with_name(target.name + ".tmp")
+        pending.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(pending, target)
+        return target
 
     def save_reports():
         if args.json:
@@ -79,6 +94,7 @@ def execute(args):
                     error_report = {"reference": reference, "selected_branch": None,
                                     "status": "ERROR", "issues": [f"{type(exc).__name__}: {exc}"]}
                     reports.append(error_report)
+                    save_branch(error_report, reference, None)
                     save_reports()
                     print(f"{reference}: ERROR - {error_report['issues'][0]}")
                     continue
@@ -87,10 +103,16 @@ def execute(args):
 
             print(f"{reference}: checking {len(branches)} translation(s)", flush=True)
             for branch_id in branches:
-                previous = next(
-                    (r for r in saved_reports
-                     if r.get("reference") == reference and r.get("selected_branch") == branch_id),
-                    None)
+                title_slug = prepared[0].slug_url if prepared is not None else None
+                previous = None
+                if args.resume:
+                    source = report_path(reference, branch_id, title_slug)
+                    if source.is_file():
+                        previous = json.loads(source.read_text(encoding="utf-8"))
+                    else:
+                        previous = next((r for r in saved_reports
+                                         if r.get("reference") == reference
+                                         and r.get("selected_branch") == branch_id), None)
                 active = None
                 branch_label = f"branch {branch_id}" if branch_id is not None else "unbranched"
 
@@ -107,6 +129,7 @@ def execute(args):
                           f"unverified={state['unverified']} "
                           f"elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m", flush=True)
                     if current % args.save_every == 0 or current == total:
+                        save_branch(state, reference, branch_id, title_slug)
                         save_reports()
 
                 try:
@@ -128,7 +151,9 @@ def execute(args):
                 report["reference"] = reference
                 if not any(r is report for r in reports):
                     reports.append(report)
+                saved_at = save_branch(report, reference, branch_id, title_slug)
                 save_reports()
+                print(f"Report saved: {saved_at}")
                 label = report["status"]
                 if use_color:
                     label = colors.get(label, "") + label + "\x1b[0m"
