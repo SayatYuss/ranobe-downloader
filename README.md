@@ -1,6 +1,6 @@
 # Ranobe Downloader
 
-Python CLI для скачивания текстовых глав RanobeLib в EPUB 3.
+Python CLI для скачивания произведений RanobeLib в EPUB 3, TXT и HTML.
 
 > Alpha. Используйте только для произведений, на скачивание которых у вас есть право. Соблюдайте ограничения API.
 
@@ -52,7 +52,7 @@ ranobe download "55754--cuttlefish-that-loves-diving" \
 - `--delay SECONDS` — задержка между запросами глав (по умолчанию 1).
 - `--retries N` — максимальное число попыток (по умолчанию 5).
 - `--limit N` — скачать только первые N глав для проверки.
-- `--output PATH` — путь результирующего EPUB.
+- `--output PATH` — путь результирующего файла.
 - `--verbose` — подробный лог загрузки каждого изображения; без флага вывод компактный.
 - `--image-mode original|optimized` — оригинальные файлы (по умолчанию) или оптимизация PNG.
 - `--image-quality N` — качество JPEG (1–100, по умолчанию 85), только для `optimized`.
@@ -72,7 +72,7 @@ python -m unittest discover -s tests -v
 
 - `core/` — модели, логика скачивания, чекпоинты, повторные попытки.
 - `providers/libsocial/` — интеграция с API.
-- `exporters/` — создание EPUB.
+- `exporters/` — создание EPUB, TXT и HTML.
 - `interfaces/cli/` и `main.py` — командный интерфейс.
 
 Проект находится в разработке, обратная совместимость CLI пока не гарантируется.
@@ -80,16 +80,16 @@ python -m unittest discover -s tests -v
 
 ## Выпуск версии (maintainers)
 
-Текущая версия указана в `pyproject.toml`; CLI показывает её через `ranobe --version`.
+Текущая версия указана в `pyproject.toml`; CLI показывает её через `ranobe --version`. История изменений — в [CHANGELOG.md](CHANGELOG.md).
 
 1. Убедитесь, что изменения проверены и включены в целевую стабильную ветку.
 2. Установите новую версию в `pyproject.toml` и закоммитьте изменение.
 3. Создайте и отправьте тег, соответствующий версии по PEP 440:
 
 ```bash
-# Для version = "0.1.0a1"
-git tag v0.1.0a1
-git push origin v0.1.0a1
+# Для version = "0.2.0a1"
+git tag v0.2.0a1
+git push origin v0.2.0a1
 ```
 
 Workflow `.github/workflows/release.yml` проверяет соответствие тега версии, запускает тесты, собирает wheel и sdist, проверяет wheel в отдельном venv и публикует файлы в **GitHub Releases** как prerelease.
