@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from uuid import uuid4
@@ -50,6 +51,7 @@ class EpubExporter:
             spine.append(f'<itemref idref="c{index}"/>')
             navigation.append(f'<li><a href="{filename}">{e(chapter.title)}</a></li>')
 
+        modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         creators = "".join(f"<dc:creator>{e(author)}</dc:creator>" for author in authors)
         synopsis = f"<dc:description>{e(description)}</dc:description>" if description else ""
         opf = (
@@ -58,7 +60,7 @@ class EpubExporter:
             '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
             f'<dc:identifier id="uid">{e(book_id)}</dc:identifier>'
             f'<dc:title>{e(title)}</dc:title><dc:language>{e(language)}</dc:language>'
-            f'{creators}{synopsis}</metadata><manifest>'
+            f'{creators}{synopsis}<meta property="dcterms:modified">{modified}</meta></metadata><manifest>'
             '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
             f'{"".join(items)}</manifest><spine>{"".join(spine)}</spine></package>'
         )
