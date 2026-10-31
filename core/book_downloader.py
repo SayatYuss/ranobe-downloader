@@ -116,9 +116,10 @@ class BookDownloader:
                     attempts=retries,
                 )
                 data = raw.data
-                if raw.unavailable_reason:
+                unavailable_reason = ChapterContent.from_api(raw.data).unavailable_reason
+                if unavailable_reason:
                     raise ChapterContentUnavailable(
-                        f"Chapter {item.volume}/{item.number}: {raw.unavailable_reason}")
+                        f"Chapter {item.volume}/{item.number}: {unavailable_reason}")
                 if not isinstance(raw.content, (dict, str)):
                     raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
                 checkpoints.save(item.id, data, volume=item.volume, number=item.number)
