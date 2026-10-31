@@ -13,6 +13,7 @@ from providers.libsocial.client import LibSocialClient
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('reference', help='Title ID, ID--slug, or RanobeLib URL')
     parser.add_argument('--branch', type=int, help='Translation branch ID')
+    parser.add_argument('--non-interactive', action='store_true', help='Disable interactive translation menu')
     parser.add_argument('--limit', type=int, help='Download only first N chapters (for testing)')
     parser.add_argument('--output', type=Path, help='Output EPUB path (default: output/<id>.epub)')
     parser.add_argument('--resume', action='store_true', help='Reuse verified cached chapters')
