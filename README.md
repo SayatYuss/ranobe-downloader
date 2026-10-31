@@ -152,3 +152,7 @@ ranobe audit '14841--beginning-after-the-end-novel' --branch 9824 --mode full --
 ```
 
 Чтобы исключить столкновение отчётов разных книг, сохраняйте их в отдельные JSON-файлы. Для неопределённых сетевых ошибок итоговый статус `INCONCLUSIVE`, для проблем совместимости — `INCOMPATIBLE`.
+
+### Проверка всех переводов
+
+`ranobe audit '14841--beginning-after-the-end-novel' --all-branches --mode sample --sample 30 --json output/audit-all-branches.json` проверяет каждый найденный перевод отдельно. Метаданные и индекс загружаются один раз; в JSON каждый перевод хранится отдельным элементом с `selected_branch`. Можно добавить `--check-images`, `--resume` и `--mode full`. Флаги `--branch` и `--all-branches` взаимоисключающие.
