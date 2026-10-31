@@ -9,7 +9,7 @@ import time
 import httpx
 
 from core.chapter_xhtml import chapter_to_xhtml
-from core.download.images import image_refs, FORMATS, load_images
+from core.download.images import image_refs, FORMATS, load_images, valid_image_identifier
 from core.download.html_images import resolve_html_images
 from core.download.plan import make_translations
 from urllib.parse import urlsplit
@@ -207,7 +207,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
                             or ".." in parsed.path.split("/") or parsed.query or parsed.fragment
                             or parsed.path != path):
                         raise ValueError(f"Invalid attachment path: {uid}")
-                    if any(ch not in "0123456789abcdef-" for ch in uid.lower()):
+                    if not valid_image_identifier(uid):
                         raise ValueError(f"Invalid image identifier: {uid}")
                     paths[uid] = f"images/{uid}.{ext}"
             html_paths = {src: paths[uid] for src, uid in html_sources.items()}
