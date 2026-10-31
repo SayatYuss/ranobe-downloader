@@ -68,3 +68,24 @@ class AuditTests(unittest.TestCase):
                 title="One", content={"type": "doc", "content": []})
             result = audit_title(Mock(), "7", mode="sample")
             self.assertEqual(result["status"], "INCONCLUSIVE")
+
+    def test_rate_limit_is_inconclusive(self):
+        import httpx
+        title = SimpleNamespace(id=7, slug_url="7--book", title="Book",
+                                authors=(), description="", cover_url=None)
+        chapter = SimpleNamespace(id=1, volume="1", number="1", index=1,
+                                  name="One", branches=[SimpleNamespace(branch_id=11)])
+        request = httpx.Request("GET", "https://example.org/chapter")
+        response = httpx.Response(429, request=request)
+        error = httpx.HTTPStatusError("rate limit", request=request, response=response)
+        with patch("core.compatibility_audit.TitleProvider") as tp, patch(
+            "core.compatibility_audit.ChapterProvider") as cp, patch(
+            "core.compatibility_audit.ChapterContentProvider") as dp:
+            tp.return_value.get_title.return_value = title
+            cp.return_value.get_chapters.return_value = [chapter]
+            dp.return_value.get_chapter.side_effect = error
+            result = audit_title(Mock(), "7", retries=1, delay=0)
+            self.assertEqual(result["status"], "INCONCLUSIVE")
+            self.assertEqual(result["unverified"], 1)
+            self.assertEqual(result["failed"], 0)
+
