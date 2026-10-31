@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -20,8 +21,13 @@ class ChapterCheckpoint:
         if not path.exists():
             return None
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, UnicodeError):
+            raw = path.read_bytes()
+            digest_file = path.with_suffix(".sha256")
+            if digest_file.is_file():
+                if digest_file.read_text(encoding="ascii").strip() != sha256(raw).hexdigest():
+                    return None
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, ValueError, UnicodeError):
             return None
         if not self._valid(data, volume=volume, number=number):
             return None
@@ -49,6 +55,19 @@ class ChapterCheckpoint:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp_path, self.path(chapter_id))
+            # Optional checksum: old checkpoints without a sidecar remain readable.
+            digest = sha256(self.path(chapter_id).read_bytes()).hexdigest()
+            sidecar = self.path(chapter_id).with_suffix(".sha256")
+            with NamedTemporaryFile(mode="w", encoding="ascii", dir=self.directory,
+                                    prefix=".checksum-", suffix=".tmp", delete=False) as handle:
+                checksum_temp = Path(handle.name)
+                handle.write(digest)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.replace(checksum_temp, sidecar)
+            finally:
+                checksum_temp.unlink(missing_ok=True)
         finally:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
