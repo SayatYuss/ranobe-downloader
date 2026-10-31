@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
+from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Lock
 from typing import Callable
@@ -50,15 +51,19 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
     """Create an in-process job server. Jobs are not persisted across restarts."""
     if max_workers < 1 or max_jobs < 1:
         raise ValueError("max_workers and max_jobs must be positive")
-    app = FastAPI(title="Ranobe Downloader API", version="0.1")
     executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="ranobe-api")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        try:
+            yield
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+    app = FastAPI(title="Ranobe Downloader API", version="0.1", lifespan=lifespan)
     base = Path(output_dir).resolve()
     jobs: dict[str, Job] = {}
     lock = Lock()
-
-    @app.on_event("shutdown")
-    def shutdown():
-        executor.shutdown(wait=False, cancel_futures=True)
 
     def snapshot(job_id: str) -> dict:
         with lock:
@@ -79,7 +84,11 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
                 return {
                     "id": book.id, "title": book.title, "slug_url": book.slug_url,
                     "authors": list(book.authors), "chapter_count": book.chapter_count,
-                    "translations": [asdict(item) for item in book.translations],
+                    "translations": [
+                        {"branch_id": t.branch_id, "chapter_count": t.chapter_count,
+                         "name": t.name}
+                        for t in book.translations
+                    ],
                 }
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
