@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from core.download.statistics import DownloadStatistics
 from interfaces.cli.download import configure_parser, execute, _print_summary
@@ -21,9 +21,7 @@ class DownloadCliTests(unittest.TestCase):
             args.output = None
             with patch("interfaces.cli.download.LibSocialClient") as client, patch(
                 "interfaces.cli.download.KeyringTokenStorage"
-            ), patch("interfaces.cli.download.BookDownloader") as downloader, patch(
-                "interfaces.cli.download.Path", wraps=Path
-            ):
+            ), patch("interfaces.cli.download.BookDownloader") as downloader:
                 downloader.return_value.prepare.return_value = plan
                 downloader.return_value.download.return_value = Path("output/100--test_77.txt")
                 execute(args)
