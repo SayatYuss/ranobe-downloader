@@ -61,12 +61,9 @@ class ChapterCheckpoint:
             with NamedTemporaryFile(mode="w", encoding="ascii", dir=self.directory,
                                     prefix=".checksum-", suffix=".tmp", delete=False) as handle:
                 checksum_temp = Path(handle.name)
-                try:
-                    handle.write(digest)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                finally:
-                    pass
+                handle.write(digest)
+                handle.flush()
+                os.fsync(handle.fileno())
             try:
                 os.replace(checksum_temp, sidecar)
             finally:
