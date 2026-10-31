@@ -60,7 +60,7 @@ def _fetch(url):
             return bytes(payload)
 
 
-def load_images(document, attachments, cache_directory: Path, chapter_id: int):
+def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None):
     """Return UUID -> (EPUB path, bytes, mime). Download referenced attachments only."""
     refs = image_refs(document)
     if not refs:
@@ -93,6 +93,8 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int):
             except ValueError:
                 data = None
         if data is None:
+            if status:
+                status(f'  Downloading image {uid}.{ext}...')
             failures = []
             for host in HOSTS:
                 try:
