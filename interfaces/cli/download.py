@@ -6,12 +6,14 @@ import httpx
 
 from core.auth.storage import KeyringTokenStorage
 from core.book_downloader import BookDownloader
+from interfaces.cli.translation_selector import select_translation
 from providers.libsocial.client import LibSocialClient
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('reference', help='Title ID, ID--slug, or RanobeLib URL')
     parser.add_argument('--branch', type=int, help='Translation branch ID')
+    parser.add_argument('--non-interactive', action='store_true', help='Disable interactive translation menu')
     parser.add_argument('--limit', type=int, help='Download only first N chapters (for testing)')
     parser.add_argument('--output', type=Path, help='Output EPUB path (default: output/<id>.epub)')
     parser.add_argument('--resume', action='store_true', help='Reuse verified cached chapters')
@@ -49,18 +51,18 @@ def execute(args: argparse.Namespace) -> None:
                 print(f'[{current}/{total}] {current / total:.0%}  {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
             downloader = BookDownloader(client)
-            title = downloader.titles.get_title(args.reference)
-            print(f'Title: {title.title}', flush=True)
-            target = args.output or Path('output') / f'{title.id}.epub'
-            # Keep a single fetched title available for the workflow.
-            downloader.titles.get_title = lambda reference: title
+            plan = downloader.prepare(args.reference)
+            print(f'Title: {plan.title.title}', flush=True)
+            target = args.output or Path('output') / f'{plan.title.id}.epub'
             def report_status(message):
                 if args.verbose or not (message.startswith('  Downloading image ') or
                                         (message.startswith('[') and 'Loading chapter' in message)):
                     print(message, flush=True)
 
-            result = downloader.download(args.reference, target,
-                                         branch_id=args.branch, limit=args.limit,
+            branch_id = args.branch if args.branch is not None else select_translation(
+                plan.translations, interactive=not args.non_interactive)
+            result = downloader.download(plan, target,
+                                         branch_id=branch_id, limit=args.limit,
                                          progress=report, resume=args.resume,
                                          cache_dir=args.cache_dir, delay=args.delay,
                                          retries=args.retries,

@@ -8,6 +8,7 @@ from core.download.checkpoint import ChapterCheckpoint
 from core.download.retry import with_retries
 from core.download.images import load_images
 from core.download.statistics import DownloadStatistics
+from core.download.plan import DownloadPlan, make_translations
 from pathlib import Path
 from typing import Callable
 
@@ -36,7 +37,20 @@ class BookDownloader:
         self.contents = ChapterContentProvider(client)
         self.exporter = exporter or EpubExporter()
 
-    def download(self, reference: str, output: str | Path, *,
+    def prepare(self, reference: str, *,
+                status: Callable[[str], None] | None = None) -> DownloadPlan:
+        """Fetch metadata and chapter index once, without prompting for input."""
+        if status:
+            status('Fetching title metadata...')
+        title = self.titles.get_title(reference)
+        if status:
+            status('Fetching chapter index...')
+        chapters = tuple(self.chapters.get_chapters(title.slug_url))
+        if not chapters:
+            raise ValueError('No chapters found')
+        return DownloadPlan(title, chapters, make_translations(chapters))
+
+    def download(self, reference: str | DownloadPlan, output: str | Path, *,
                  branch_id: int | None = None, limit: int | None = None,
                  progress: Callable[[int, int, str], None] | None = None,
                  resume: bool = False, cache_dir: str | Path = 'output/.cache',
@@ -51,20 +65,13 @@ class BookDownloader:
             raise ValueError('delay must be non-negative and retries must be positive')
         if limit is not None and limit < 1:
             raise ValueError('limit must be positive')
-        if status:
-            status('Fetching title metadata...')
-        title = self.titles.get_title(reference)
-        if status:
-            status('Fetching chapter index...')
-        chapter_list = self.chapters.get_chapters(title.slug_url)
-        if not chapter_list:
-            raise ValueError('No chapters found')
-
-        available = {b.branch_id for chapter in chapter_list for b in chapter.branches
-                     if b.branch_id is not None}
+        plan = reference if isinstance(reference, DownloadPlan) else self.prepare(reference, status=status)
+        title = plan.title
+        chapter_list = plan.chapters
+        available = {translation.branch_id for translation in plan.translations}
         if branch_id is None:
             if len(available) > 1:
-                raise ValueError('Multiple translations available. Specify --branch: '
+                raise ValueError('Multiple translations available. Specify branch_id: '
                                  + ', '.join(str(v) for v in sorted(available)))
             branch_id = next(iter(available), None)
         elif available and branch_id not in available:
@@ -138,7 +145,8 @@ class BookDownloader:
             try:
                 cover, cover_type = download_cover(cover_url)
             except (httpx.HTTPError, ValueError) as exc:
-                print(f'Cover skipped: {exc}')
+                if status:
+                    status(f'Cover skipped: {exc}')
 
         result = self.exporter.export(
             output, title=title.title, authors=title.authors, chapters=rendered,
