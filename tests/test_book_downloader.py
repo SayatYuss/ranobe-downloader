@@ -26,6 +26,18 @@ class WorkflowTests(unittest.TestCase):
                 {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hello'}]}]}},
             content={'type': 'doc', 'content': []}))
 
+    def test_prepare_translations_and_reuse(self):
+        self.downloader.chapters.get_chapters = Mock(return_value=[
+            chapter(2, [10, 20]), chapter(1, [10]),
+        ])
+        plan = self.downloader.prepare('7')
+        self.assertEqual([(t.branch_id, t.chapter_count) for t in plan.translations],
+                         [(10, 2), (20, 1)])
+        self.downloader.download(plan, 'book.epub', branch_id=10,
+                                 limit=1, delay=0, cache_dir=self.temp.name)
+        self.downloader.titles.get_title.assert_called_once()
+        self.downloader.chapters.get_chapters.assert_called_once()
+
     def test_ambiguous_branch_fails_before_download(self):
         self.downloader.chapters.get_chapters = Mock(return_value=[chapter(1, [10, 20])])
         with self.assertRaisesRegex(ValueError, 'Multiple translations'):
