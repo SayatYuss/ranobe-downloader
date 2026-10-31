@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from hashlib import sha256
 import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -100,10 +101,14 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             raise ValueError("Invalid image identifier")
         target = cache_directory / "images" / str(chapter_id) / filename
         data = target.read_bytes() if target.is_file() else None
+        digest_path = target.with_suffix(target.suffix + ".sha256")
         if data is not None:
             try:
                 _verified_media(data, mime)
-            except ValueError:
+                if digest_path.is_file():
+                    if digest_path.read_text(encoding="ascii").strip() != sha256(data).hexdigest():
+                        data = None
+            except (ValueError, UnicodeError, OSError):
                 data = None
         if data is None:
             if status:
@@ -119,6 +124,18 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(temp, target)
+                checksum_temp = None
+                try:
+                    with NamedTemporaryFile(mode="w", encoding="ascii",
+                                            dir=target.parent, delete=False) as handle:
+                        checksum_temp = Path(handle.name)
+                        handle.write(sha256(data).hexdigest())
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(checksum_temp, digest_path)
+                finally:
+                    if checksum_temp is not None:
+                        checksum_temp.unlink(missing_ok=True)
             finally:
                 if temp is not None:
                     temp.unlink(missing_ok=True)
