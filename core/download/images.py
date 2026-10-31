@@ -5,7 +5,7 @@ import os
 import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from urllib.parse import urlsplit
+from providers.libsocial.media_policy import HOSTS, IMAGE_HEADERS, attachment_path, image_urls
 import httpx
 from core.download.image_optimization import optimize_image
 
@@ -15,7 +15,6 @@ SIGNATURES = {"image/jpeg": lambda b: b.startswith(bytes.fromhex("ffd8ff")),
               "image/png": lambda b: b.startswith(bytes.fromhex("89504e470d0a1a0a")),
               "image/gif": lambda b: b.startswith((b"GIF87a", b"GIF89a")),
               "image/webp": lambda b: len(b) > 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP"}
-HOSTS = ("ranobelib.me", "img3.mixlib.me")
 MAX_SIZE = 30 * 1024 * 1024
 IMAGE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
@@ -52,9 +51,7 @@ def _verified_media(data, mime):
 
 
 def _fetch(url):
-    headers = {"Referer": "https://ranobelib.me/",
-               "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/156 Safari/537.36",
-               "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
+    headers = IMAGE_HEADERS
     with httpx.Client(timeout=25, follow_redirects=False, headers=headers) as client:
         with client.stream("GET", url) as response:
             response.raise_for_status()
@@ -92,11 +89,7 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             raise ValueError(f"Unsupported image extension: {ext}")
         mime = FORMATS[ext]
         path = str(attachment.get("originalUrl") or attachment.get("url") or "")
-        parsed = urlsplit(path)
-        if parsed.scheme or parsed.netloc or not path.startswith("/uploads/ranobe/") or ".." in parsed.path.split("/") or parsed.query or parsed.fragment:
-            raise ValueError("Invalid attachment path")
-        if parsed.path != path:
-            raise ValueError("Invalid attachment path")
+        attachment_path(path)
         filename = f"{uid}.{ext}"
         if not valid_image_identifier(uid):
             raise ValueError("Invalid image identifier")
@@ -111,13 +104,13 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             if status:
                 status(f'  Downloading image {uid}.{ext}...')
             failures = []
-            for host in HOSTS:
+            for url in image_urls(path):
                 try:
-                    data = _fetch(f"https://{host}{path}")
+                    data = _fetch(url)
                     _verified_media(data, mime)
                     break
                 except (httpx.HTTPError, ValueError) as exc:
-                    failures.append(f"{host}: {exc}")
+                    failures.append(f"{url}: {exc}")
             else:
                 raise ValueError(f"Failed to download image {uid}: {'; '.join(failures)}")
             target.parent.mkdir(parents=True, exist_ok=True)
