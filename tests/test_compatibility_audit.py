@@ -180,3 +180,28 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(result["status"], "COMPATIBLE")
             loader.assert_called_once()
 
+
+    def test_prepared_index_selects_each_translation(self):
+        title = SimpleNamespace(id=7, slug_url="7--book", title="Book",
+                                authors=(), description="", cover_url=None)
+        chapters = [
+            SimpleNamespace(id=1, volume="1", number="1", index=1,
+                            name="One", branches=[SimpleNamespace(branch_id=11)]),
+            SimpleNamespace(id=2, volume="1", number="2", index=2,
+                            name="Two", branches=[SimpleNamespace(branch_id=22)]),
+        ]
+        with patch("core.compatibility_audit.TitleProvider") as tp, patch(
+            "core.compatibility_audit.ChapterProvider") as cp, patch(
+            "core.compatibility_audit.ChapterContentProvider") as dp:
+            dp.return_value.get_chapter.return_value = SimpleNamespace(
+                title="Chapter", content={"type": "doc", "content": []},
+                data={"attachments": []})
+            for branch in (11, 22):
+                result = audit_title(Mock(), "7", branch_id=branch,
+                                     prepared=(title, chapters), delay=0)
+                self.assertEqual(result["status"], "COMPATIBLE")
+                self.assertEqual(result["selected_branch"], branch)
+                self.assertEqual(result["chapters_selected"], 1)
+            tp.assert_not_called()
+            cp.assert_not_called()
+            self.assertEqual(dp.return_value.get_chapter.call_count, 2)
