@@ -4,6 +4,14 @@ from dataclasses import dataclass
 from typing import Any
 
 
+class ChapterContentUnavailable(ValueError):
+    """Chapter content was withheld or omitted by the API."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
 @dataclass(frozen=True)
 class ChapterContent:
     """Raw chapter payload, retained without lossy HTML/schema conversion.
