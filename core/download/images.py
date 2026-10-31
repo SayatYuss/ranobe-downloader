@@ -66,7 +66,7 @@ def _legacy_media(attachment):
             return _fetch(url)
         except (httpx.HTTPError, ValueError) as exc:
             failures.append(f"{url}: {exc}")
-    raise ValueError("Failed to download image: " + "; ".join(failures)
+    raise ValueError("Failed to download image: " + "; ".join(failures))
 
 
 def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None,
