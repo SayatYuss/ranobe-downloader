@@ -42,9 +42,9 @@ class EpubIntegrationTests(unittest.TestCase):
         self.image_path = "/uploads/ranobe/book/chapters/102/image_i9wg.gif"
         attachment = {"name": self.uid, "extension": "gif", "originalUrl": self.image_path}
         self.payloads = {
-            "1": {"id": 101, "name": "Первая", "content": "<p>Первый &amp; текст</p>"},
+            "1": {"id": 101, "volume": "1", "number": "1", "name": "Первая", "content": "<p>Первый &amp; текст</p>"},
             "2": {
-                "id": 102, "name": "Вторая",
+                "id": 102, "volume": "1", "number": "2", "name": "Вторая",
                 "content": {"type": "doc", "content": [
                     {"type": "paragraph", "content": [{"type": "text", "text": "Второй текст"}]},
                     {"type": "image", "attrs": {"images": [{"image": self.uid}]}}
