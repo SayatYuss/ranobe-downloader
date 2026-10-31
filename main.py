@@ -11,7 +11,7 @@ def main() -> None:
     try:
         package_version = version("ranobe-downloader")
     except PackageNotFoundError:
-        package_version = "0.1.0a1"
+        package_version = "0.2.0a1"
     parser.add_argument("--version", action="version", version=f"%(prog)s {package_version}")
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ('login', 'status', 'logout'):
