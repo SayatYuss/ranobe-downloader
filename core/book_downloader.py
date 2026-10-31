@@ -14,6 +14,8 @@ from exporters.epub import EpubChapter, EpubExporter
 from providers.libsocial.chapter_content import ChapterContentProvider
 from providers.libsocial.chapters import ChapterProvider
 from providers.libsocial.titles import TitleProvider
+from providers.libsocial.cover import download_cover
+import httpx
 
 
 def _chapter_order(chapter):
@@ -89,7 +91,17 @@ class BookDownloader:
             if progress is not None:
                 progress(index, len(selected), label)
 
+        cover = None
+        cover_type = None
+        cover_url = getattr(title, 'cover_url', None)
+        if cover_url:
+            try:
+                cover, cover_type = download_cover(cover_url)
+            except (httpx.HTTPError, ValueError) as exc:
+                print(f'Cover skipped: {exc}')
+
         return self.exporter.export(
             output, title=title.title, authors=title.authors, chapters=rendered,
             description=title.description, identifier=f'ranobelib:{title.id}',
+            cover=cover, cover_media_type=cover_type,
         )
