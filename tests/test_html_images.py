@@ -50,9 +50,25 @@ class HtmlImagesTests(unittest.TestCase):
         sources, ids = resolve_html_images(
             '<img src="' + self.path + '">', attachments,
         )
-        self.assertEqual(ids, [self.uid])
-        self.assertEqual(sources[self.path], self.uid)
+        self.assertEqual(len(ids), 1)
+        self.assertEqual(len(ids[0]), 64)
+        self.assertEqual(sources[self.path], ids[0])
         self.assertEqual(attachments[0]["originalUrl"], self.path)
+
+    def test_slug_title_and_named_html_image(self):
+        path = "/uploads/ranobe/the-beginning-after-the-end-novel/chapters/2066341/karta-dikatena_NUh2.png"
+        attachments = []
+        sources, ids = resolve_html_images('<img src="' + path + '">', attachments)
+        self.assertEqual(len(ids), 1)
+        self.assertEqual(sources[path], ids[0])
+        self.assertEqual(attachments[0]["originalUrl"], path)
+        self.assertEqual(attachments[0]["extension"], "png")
+
+    def test_path_traversal_rejected(self):
+        with self.assertRaises(ValueError):
+            resolve_html_images(
+                '<img src="/uploads/ranobe/title/chapters/1/../secret.png">', [],
+            )
 
     def test_non_image_html_unchanged(self):
         self.assertEqual(resolve_html_images("<p>Text</p>", []), ({}, []))
