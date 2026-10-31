@@ -25,6 +25,8 @@ class DownloadRequest(BaseModel):
     branch_id: int | None = None
     limit: int | None = Field(default=None, ge=1)
     resume: bool = False
+    chapter_from: str | None = Field(default=None, max_length=64)
+    chapter_to: str | None = Field(default=None, max_length=64)
 
 
 @dataclass
@@ -96,6 +98,26 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
             # Never expose credentials, upstream URLs or exception internals.
             raise HTTPException(status_code=502, detail="Failed to fetch book metadata") from exc
 
+    @app.get("/api/books/chapters")
+    def book_chapters(reference: str = Query(min_length=1, max_length=2048),
+                      branch_id: int | None = None):
+        try:
+            with downloader_factory() as downloader:
+                book = downloader.get_book(reference)
+                if branch_id is not None and book.translations and not any(
+                    t.branch_id == branch_id for t in book.translations
+                ):
+                    raise ValueError(f"Translation branch {branch_id} is not available")
+                return {
+                    "book_id": book.id,
+                    "branch_id": branch_id,
+                    "chapters": list(book.list_chapters(branch_id=branch_id)),
+                }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail="Failed to fetch chapter index") from exc
+
     def run_job(job_id: str, request: DownloadRequest):
         with lock:
             job = jobs[job_id]
@@ -112,6 +134,7 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
                 result = downloader.download(
                     request.reference, format=request.format, output=target,
                     branch_id=request.branch_id, limit=request.limit,
+                    chapter_from=request.chapter_from, chapter_to=request.chapter_to,
                     resume=request.resume, progress=progress,
                     cache_dir=base / "cache",
                 )
