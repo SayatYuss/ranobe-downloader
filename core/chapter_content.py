@@ -25,6 +25,22 @@ class ChapterContent:
         return self.data.get("content")
 
     @property
+    def restricted_view(self) -> dict[str, Any] | None:
+        value = self.data.get("restricted_view")
+        return value if isinstance(value, dict) else None
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        if isinstance(self.content, (dict, str)):
+            return None
+        restriction = self.restricted_view
+        if restriction and restriction.get("is_open") is False and restriction.get("price") is not None:
+            return "paid_content"
+        if self.content is None:
+            return "missing_content"
+        return None
+
+    @property
     def pages(self) -> Any:
         return self.data.get("pages")
 
