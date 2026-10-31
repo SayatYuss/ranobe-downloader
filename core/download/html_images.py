@@ -4,24 +4,11 @@ from __future__ import annotations
 from html.parser import HTMLParser
 from hashlib import sha256
 import re
-from urllib.parse import urlsplit
-
-from core.download.images import HOSTS
+from providers.libsocial.media_policy import html_image_path
 
 
-def _image_path(src: str) -> str:
-    parsed = urlsplit(src.strip())
-    if parsed.scheme:
-        if parsed.scheme != "https" or parsed.hostname not in HOSTS or parsed.port is not None:
-            raise ValueError("Untrusted HTML image URL")
-    elif parsed.netloc:
-        raise ValueError("Protocol-relative HTML image URL is not allowed")
-    if parsed.query or parsed.fragment or not parsed.path.startswith("/uploads/ranobe/"):
-        raise ValueError("Unsupported HTML image path")
-    if ".." in parsed.path.split("/") or "\\" in parsed.path:
-        raise ValueError("Unsafe HTML image path")
-    return parsed.path
-
+# Compatibility alias; policy is maintained by the RanobeLib provider.
+_image_path = html_image_path
 
 class _ImageCollector(HTMLParser):
     def __init__(self):
