@@ -40,7 +40,11 @@ class BookDownloader:
                  progress: Callable[[int, int, str], None] | None = None,
                  resume: bool = False, cache_dir: str | Path = 'output/.cache',
                  delay: float = 1.0, retries: int = 5,
-                 status: Callable[[str], None] | None = None) -> Path:
+                 status: Callable[[str], None] | None = None,
+                 image_mode: str = 'original', image_quality: int = 85,
+                 image_max_width: int = 1600) -> Path:
+        if image_mode not in ('original', 'optimized') or not 1 <= image_quality <= 100 or image_max_width < 1:
+            raise ValueError('Invalid image optimization settings')
         if delay < 0 or retries < 1:
             raise ValueError('delay must be non-negative and retries must be positive')
         if limit is not None and limit < 1:
@@ -99,7 +103,9 @@ class BookDownloader:
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
             media = load_images(content, data.get('attachments'), image_cache,
-                                int(data.get('id') or item.id), status=status) if isinstance(content, dict) else {}
+                                int(data.get('id') or item.id), status=status,
+                                image_mode=image_mode, image_quality=image_quality,
+                                image_max_width=image_max_width) if isinstance(content, dict) else {}
             paths = {uid: image[0] for uid, image in media.items()}
             rendered.append(EpubChapter(
                 label, chapter_to_xhtml(label, content, images=paths),
