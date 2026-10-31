@@ -62,7 +62,8 @@ def _fetch(url):
 
 
 def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None,
-                image_mode='original', image_quality=85, image_max_width=1600):
+                image_mode='original', image_quality=85, image_max_width=1600,
+                image_stats=None):
     """Return UUID -> (EPUB path, bytes, mime). Download referenced attachments only."""
     if image_mode not in ('original', 'optimized'):
         raise ValueError('image_mode must be original or optimized')
@@ -121,9 +122,12 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             finally:
                 if temp is not None:
                     temp.unlink(missing_ok=True)
+        original_size = len(data)
         output_ext = ext
         if image_mode == 'optimized':
             data, mime, output_ext = optimize_image(
                 data, mime, quality=image_quality, max_width=image_max_width)
         result[uid] = (f"images/{chapter_id}-{uid}.{output_ext}", data, mime)
+        if image_stats is not None:
+            image_stats(original_size, len(data))
     return result
