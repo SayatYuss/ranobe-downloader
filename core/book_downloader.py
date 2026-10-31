@@ -33,11 +33,19 @@ def _chapter_order(chapter):
 
 
 class BookDownloader:
-    def __init__(self, client, exporter=None):
-        self.titles = TitleProvider(client)
-        self.chapters = ChapterProvider(client)
-        self.contents = ChapterContentProvider(client)
-        self.exporter = exporter or EpubExporter()
+    def __init__(self, client=None, exporter=None, *,
+                 titles=None, chapters=None, contents=None):
+        """Inject any compatible content sources, or use the RanobeLib defaults.
+
+        Existing BookDownloader(client, exporter) calls remain supported.
+        No CLI, credential store, or interactive input is required here.
+        """
+        if client is None and any(source is None for source in (titles, chapters, contents)):
+            raise ValueError("A client or all three content sources are required")
+        self.titles = titles if titles is not None else TitleProvider(client)
+        self.chapters = chapters if chapters is not None else ChapterProvider(client)
+        self.contents = contents if contents is not None else ChapterContentProvider(client)
+        self.exporter = exporter if exporter is not None else EpubExporter()
 
     def prepare(self, reference: str, *,
                 status: Callable[[str], None] | None = None) -> DownloadPlan:
