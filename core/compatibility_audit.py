@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Callable
 import time
 import httpx
 
@@ -56,7 +56,9 @@ def _inspect(node: Any, types: Counter, marks: Counter) -> None:
 def audit_title(client, reference: str, *, sample: int = 10,
                 branch_id: int | None = None, metadata_only: bool = False,
                 retries: int = 3, mode: str | None = None,
-                delay: float = 1.0) -> dict[str, Any]:
+                delay: float = 1.0,
+                progress: Callable[[dict[str, Any], int, int], None] | None = None,
+                resume_state: dict[str, Any] | None = None) -> dict[str, Any]:
     if mode is not None and mode not in ('metadata', 'sample', 'full'):
         raise ValueError('Invalid audit mode')
     if mode == 'metadata':
@@ -105,9 +107,37 @@ def audit_title(client, reference: str, *, sample: int = 10,
     types: Counter = Counter()
     marks: Counter = Counter()
     inspected = selected if mode == 'full' else _sample_evenly(selected, sample)
+    result["audit_mode"] = "metadata" if metadata_only else (mode or "sample")
+    result["planned_chapter_ids"] = [chapter.id for chapter in inspected]
+    result["completed_chapter_ids"] = []
+    result["elapsed_seconds"] = 0.0
+    completed = set()
+    if resume_state is not None:
+        if (resume_state.get("title_id") != title.id
+                or resume_state.get("selected_branch") != branch_id
+                or resume_state.get("audit_mode") != result["audit_mode"]
+                or resume_state.get("planned_chapter_ids") != result["planned_chapter_ids"]):
+            raise ValueError("Saved audit does not match title, branch or chapter index")
+        completed = set(resume_state.get("completed_chapter_ids", []))
+        if len(completed) != len(resume_state.get("completed_chapter_ids", [])):
+            raise ValueError("Duplicate completed chapter IDs")
+        if not completed.issubset(set(result["planned_chapter_ids"])):
+            raise ValueError("Saved audit contains unknown chapter IDs")
+        keys = ("sampled", "passed", "failed", "unverified", "issues",
+                "node_types", "mark_types", "completed_chapter_ids", "elapsed_seconds")
+        result.update({key: resume_state[key] for key in keys if key in resume_state})
+        if result["sampled"] != len(completed) or result["passed"] + result["failed"] + result["unverified"] != len(completed):
+            raise ValueError("Saved audit counters do not match completed chapters")
+        types.update(result["node_types"])
+        marks.update(result["mark_types"])
+    started = time.monotonic()
+    processed_new = 0
     for index, chapter in enumerate(inspected):
-        if index and delay:
+        if chapter.id in completed:
+            continue
+        if processed_new and delay:
             time.sleep(delay)
+        processed_new += 1
         result["sampled"] += 1
         coordinate = f"{chapter.volume}/{chapter.number}"
         try:
@@ -146,6 +176,12 @@ def audit_title(client, reference: str, *, sample: int = 10,
             # Preserve partial audit results; do not expose full server payloads.
             result["failed"] += 1
             result["issues"].append(f"Chapter {coordinate}: {type(exc).__name__}: {exc}")
+        result["completed_chapter_ids"].append(chapter.id)
+        result["node_types"] = dict(sorted(types.items()))
+        result["mark_types"] = dict(sorted(marks.items()))
+        result["elapsed_seconds"] = float((resume_state or {}).get("elapsed_seconds", 0)) + time.monotonic() - started
+        if progress:
+            progress(result, result["sampled"], len(inspected))
     result["node_types"] = dict(sorted(types.items()))
     result["mark_types"] = dict(sorted(marks.items()))
     if result["failed"]:
