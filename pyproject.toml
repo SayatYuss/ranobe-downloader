@@ -12,10 +12,8 @@ dependencies = [
   "httpx>=0.27,<1",
   "keyring>=25,<27",
 ]
-[project.optional-dependencies]
-images = ["Pillow>=10,<13"]
-
 authors = [{name = "SayatYuss"}]
+
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -26,6 +24,9 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
+
+[project.optional-dependencies]
+images = ["Pillow>=10,<13"]
 
 [project.scripts]
 ranobe = "main:main"
