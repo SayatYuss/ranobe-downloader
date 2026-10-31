@@ -89,3 +89,30 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(result["unverified"], 1)
             self.assertEqual(result["failed"], 0)
 
+
+    def test_progress_and_resume_skip_completed_chapters(self):
+        title = SimpleNamespace(id=7, slug_url="7--book", title="Book",
+                                authors=(), description="", cover_url=None)
+        chapters = [SimpleNamespace(id=i, volume="1", number=str(i), index=i,
+                                    name=str(i), branches=[SimpleNamespace(branch_id=11)])
+                    for i in range(1, 4)]
+        with patch("core.compatibility_audit.TitleProvider") as tp, patch(
+            "core.compatibility_audit.ChapterProvider") as cp, patch(
+            "core.compatibility_audit.ChapterContentProvider") as dp:
+            tp.return_value.get_title.return_value = title
+            cp.return_value.get_chapters.return_value = chapters
+            dp.return_value.get_chapter.return_value = SimpleNamespace(
+                title="One", content={"type": "doc", "content": []})
+            snapshots = []
+            def record(state, current, total):
+                import copy
+                snapshots.append(copy.deepcopy(state))
+                self.assertEqual(total, 3)
+            result = audit_title(Mock(), "7", mode="full", delay=0, progress=record)
+            self.assertEqual([s["sampled"] for s in snapshots], [1, 2, 3])
+            self.assertEqual(result["passed"], 3)
+            dp.return_value.get_chapter.reset_mock()
+            resumed = audit_title(Mock(), "7", mode="full", delay=0,
+                                  resume_state=snapshots[1])
+            self.assertEqual(resumed["passed"], 3)
+            dp.return_value.get_chapter.assert_called_once()
