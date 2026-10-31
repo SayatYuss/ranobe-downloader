@@ -61,7 +61,8 @@ def audit_title(client, reference: str, *, sample: int = 10,
                 progress: Callable[[dict[str, Any], int, int], None] | None = None,
                 resume_state: dict[str, Any] | None = None,
                 check_images: bool = False,
-                image_cache_dir: str | Path = 'output/.cache/audit') -> dict[str, Any]:
+                image_cache_dir: str | Path = 'output/.cache/audit',
+                prepared: tuple[Any, Any] | None = None) -> dict[str, Any]:
     if mode is not None and mode not in ('metadata', 'sample', 'full'):
         raise ValueError('Invalid audit mode')
     if mode == 'metadata':
@@ -70,8 +71,11 @@ def audit_title(client, reference: str, *, sample: int = 10,
         raise ValueError("delay must be non-negative")
     if sample < 1 or retries < 1:
         raise ValueError("sample and retries must be positive")
-    title = with_retries(lambda: TitleProvider(client).get_title(reference), attempts=retries)
-    chapters = with_retries(lambda: ChapterProvider(client).get_chapters(title.slug_url), attempts=retries)
+    if prepared is None:
+        title = with_retries(lambda: TitleProvider(client).get_title(reference), attempts=retries)
+        chapters = with_retries(lambda: ChapterProvider(client).get_chapters(title.slug_url), attempts=retries)
+    else:
+        title, chapters = prepared
     available = [t.branch_id for t in make_translations(tuple(chapters))]
     if branch_id is not None and available and branch_id not in available:
         raise ValueError(f"Branch {branch_id} not found; available: {available}")
