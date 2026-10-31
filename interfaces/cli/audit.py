@@ -19,10 +19,13 @@ def configure_parser(parser):
     parser.add_argument("--metadata-only", action="store_true",
                         help="Inspect metadata and chapter index without fetching chapter text")
     parser.add_argument("--json", type=Path, metavar="PATH", help="Write JSON report")
+    parser.add_argument("--delay", type=float, default=1.0, help="Seconds between chapter requests (default: 1)")
     parser.add_argument("--retries", type=int, default=3)
 
 
 def execute(args):
+    if args.delay < 0:
+        raise SystemExit('--delay must be non-negative')
     if args.sample < 1 or args.retries < 1:
         raise SystemExit("--sample and --retries must be positive")
     reports = []
@@ -37,6 +40,7 @@ def execute(args):
                     client, reference, sample=args.sample, branch_id=args.branch,
                     metadata_only=args.metadata_only, retries=args.retries,
                     mode='metadata' if args.metadata_only else args.mode,
+                    delay=args.delay,
                 )
             except Exception as exc:
                 report = {"reference": reference, "status": "ERROR", "issues": [
@@ -48,7 +52,8 @@ def execute(args):
             print(f"{report.get('title', reference)}: {label}")
             if "chapters_total" in report:
                 print(f"  Chapters: {report['chapters_total']}, sampled: {report['sampled']}, "
-                      f"passed: {report['passed']}, failed: {report['failed']}")
+                      f"passed: {report['passed']}, failed: {report['failed']}, "
+                      f"unverified: {report.get('unverified', 0)}")
                 print(f"  Branches: {report['available_branches']}")
                 print(f"  Nodes: {report['node_types']}")
             for issue in report["issues"]:
