@@ -189,4 +189,6 @@ def audit_title(client, reference: str, *, sample: int = 10,
         result["status"] = "INCOMPATIBLE"
     elif result["unverified"] or (len(available) > 1 and branch_id is None) or result["duplicate_coordinates"]:
         result["status"] = "INCONCLUSIVE"
+    else:
+        result["status"] = "COMPATIBLE"
     return result
