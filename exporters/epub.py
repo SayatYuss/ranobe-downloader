@@ -1,7 +1,7 @@
 """Minimal EPUB 3 exporter (stdlib only): metadata, navigation, and XHTML chapters."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from core.download.models import NormalizedChapter
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -10,11 +10,8 @@ from xml.etree import ElementTree
 from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 
 
-@dataclass(frozen=True)
-class EpubChapter:
-    title: str
-    xhtml: str
-    images: tuple[tuple[str, bytes, str], ...] = ()
+# Backward-compatible public name for callers using the original EPUB model.
+EpubChapter = NormalizedChapter
 
 
 class EpubExporter:
