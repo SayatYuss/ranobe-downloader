@@ -59,7 +59,7 @@ class EpubIntegrationTests(unittest.TestCase):
 
     def _download(self, *, resume=False):
         destination = self.root / "novel.epub"
-        with patch("core.download.images._fetch", return_value=GIF):
+        with patch("providers.libsocial.media.fetch_image_url", return_value=GIF):
             return self.downloader.download(
                 "100--book", destination, cache_dir=self.root / "cache",
                 delay=0, resume=resume,
@@ -127,7 +127,7 @@ class EpubIntegrationTests(unittest.TestCase):
         from core.download.statistics import DownloadStatistics
         received = []
         destination = self.root / "novel.epub"
-        with patch("core.download.images._fetch", return_value=GIF):
+        with patch("providers.libsocial.media.fetch_image_url", return_value=GIF):
             self.downloader.download(
                 "100--book", destination, cache_dir=self.root / "cache",
                 delay=0, statistics=received.append,

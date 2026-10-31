@@ -12,6 +12,9 @@ from core.download.models import NormalizedChapter
 
 
 class ContentProcessor:
+    def __init__(self, media=None):
+        self.media = media
+
     def process(self, data: dict, item, image_cache: str | Path, *,
                 status: Callable[[str], None] | None = None,
                 image_mode: str = "original", image_quality: int = 85,
@@ -25,16 +28,18 @@ class ContentProcessor:
             raise ValueError(f"Chapter {item.volume}/{item.number}: unsupported content")
         label = data.get("name") or item.name or f"Глава {item.number}"
         attachments = list(data.get("attachments") or [])
+        resolve = self.media.resolve_html_images if self.media is not None else resolve_html_images
+        load = self.media.load_images if self.media is not None else load_images
         html_sources = {}
         if isinstance(content, str):
-            html_sources, uids = resolve_html_images(content, attachments)
+            html_sources, uids = resolve(content, attachments)
             image_document = {"type": "doc", "content": [
                 {"type": "image", "attrs": {"images": [{"image": uid}]}}
                 for uid in uids
             ]}
         else:
             image_document = content
-        media = load_images(
+        media = load(
             image_document, attachments, Path(image_cache),
             int(data.get("id") or item.id), status=status,
             image_mode=image_mode, image_quality=image_quality,

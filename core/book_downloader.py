@@ -14,10 +14,6 @@ from typing import Callable
 
 from core.chapter_content import ChapterContentUnavailable
 from exporters.epub import EpubExporter
-from providers.libsocial.chapter_content import ChapterContentProvider
-from providers.libsocial.chapters import ChapterProvider
-from providers.libsocial.titles import TitleProvider
-from providers.libsocial.cover import download_cover
 import httpx
 
 
@@ -32,7 +28,8 @@ def _chapter_order(chapter):
 
 class BookDownloader:
     def __init__(self, client=None, exporter=None, *,
-                 titles=None, chapters=None, contents=None):
+                 titles=None, chapters=None, contents=None,
+                 media=None, cover_downloader=None):
         """Inject any compatible content sources, or use the RanobeLib defaults.
 
         Existing BookDownloader(client, exporter) calls remain supported.
@@ -40,9 +37,20 @@ class BookDownloader:
         """
         if client is None and any(source is None for source in (titles, chapters, contents)):
             raise ValueError("A client or all three content sources are required")
-        self.titles = titles if titles is not None else TitleProvider(client)
-        self.chapters = chapters if chapters is not None else ChapterProvider(client)
-        self.contents = contents if contents is not None else ChapterContentProvider(client)
+        if client is not None and any(source is None for source in (titles, chapters, contents)):
+            # The RanobeLib adapter is imported only when its client is provided.
+            from providers.libsocial.adapter import LibSocialAdapter
+            adapter = LibSocialAdapter(client)
+            titles = titles if titles is not None else adapter.titles
+            chapters = chapters if chapters is not None else adapter.chapters
+            contents = contents if contents is not None else adapter.contents
+            media = media if media is not None else adapter
+            cover_downloader = cover_downloader if cover_downloader is not None else adapter.download_cover
+        self.titles = titles
+        self.chapters = chapters
+        self.contents = contents
+        self.media = media
+        self.cover_downloader = cover_downloader
         self.exporter = exporter if exporter is not None else EpubExporter()
 
     def prepare(self, reference: str, *,
@@ -109,7 +117,7 @@ class BookDownloader:
             embedded_image_bytes += embedded_size
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
         fetcher = ChapterFetcher(self.contents, checkpoints)
-        processor = ContentProcessor()
+        processor = ContentProcessor(media=self.media)
         image_cache = Path(cache_dir) / str(title.id) / f"branch-{branch_id if branch_id is not None else 'default'}"
         for index, item in enumerate(selected, 1):
             if status:
@@ -147,9 +155,9 @@ class BookDownloader:
         cover = None
         cover_type = None
         cover_url = getattr(title, 'cover_url', None)
-        if cover_url:
+        if cover_url and self.cover_downloader is not None:
             try:
-                cover, cover_type = download_cover(cover_url)
+                cover, cover_type = self.cover_downloader(cover_url)
             except (httpx.HTTPError, ValueError) as exc:
                 if status:
                     status(f'Cover skipped: {exc}')

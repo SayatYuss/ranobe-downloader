@@ -5,7 +5,6 @@ import os
 import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from urllib.parse import urlsplit
 import httpx
 from core.download.image_optimization import optimize_image
 
@@ -15,7 +14,6 @@ SIGNATURES = {"image/jpeg": lambda b: b.startswith(bytes.fromhex("ffd8ff")),
               "image/png": lambda b: b.startswith(bytes.fromhex("89504e470d0a1a0a")),
               "image/gif": lambda b: b.startswith((b"GIF87a", b"GIF89a")),
               "image/webp": lambda b: len(b) > 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP"}
-HOSTS = ("ranobelib.me", "img3.mixlib.me")
 MAX_SIZE = 30 * 1024 * 1024
 IMAGE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
@@ -52,28 +50,28 @@ def _verified_media(data, mime):
 
 
 def _fetch(url):
-    headers = {"Referer": "https://ranobelib.me/",
-               "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/156 Safari/537.36",
-               "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
-    with httpx.Client(timeout=25, follow_redirects=False, headers=headers) as client:
-        with client.stream("GET", url) as response:
-            response.raise_for_status()
-            if response.is_redirect:
-                raise ValueError("Image redirects not allowed")
-            advertised = response.headers.get("Content-Length")
-            if advertised is not None and advertised.isdecimal() and int(advertised) > MAX_SIZE:
-                raise ValueError(f"Image exceeds {MAX_SIZE // (1024 * 1024)} MiB")
-            payload = bytearray()
-            for chunk in response.iter_bytes():
-                payload.extend(chunk)
-                if len(payload) > MAX_SIZE:
-                    raise ValueError(f"Image exceeds {MAX_SIZE // (1024 * 1024)} MiB")
-            return bytes(payload)
+    """Compatibility hook for callers mocking the original image downloader."""
+    from providers.libsocial.media import fetch_image_url
+    return fetch_image_url(url)
+
+
+def _legacy_media(attachment):
+    """Retain old direct load_images calls without coupling normal provider injection."""
+    from providers.libsocial.media_policy import attachment_path, image_urls
+    path = str(attachment.get("originalUrl") or attachment.get("url") or "")
+    attachment_path(path)
+    failures = []
+    for url in image_urls(path):
+        try:
+            return _fetch(url)
+        except (httpx.HTTPError, ValueError) as exc:
+            failures.append(f"{url}: {exc}")
+    raise ValueError("Failed to download image: " + "; ".join(failures))
 
 
 def load_images(document, attachments, cache_directory: Path, chapter_id: int, status=None,
                 image_mode='original', image_quality=85, image_max_width=1600,
-                image_stats=None):
+                image_stats=None, fetch_media=None, validate_attachment=None):
     """Return UUID -> (EPUB path, bytes, mime). Download referenced attachments only."""
     if image_mode not in ('original', 'optimized'):
         raise ValueError('image_mode must be original or optimized')
@@ -92,11 +90,11 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
             raise ValueError(f"Unsupported image extension: {ext}")
         mime = FORMATS[ext]
         path = str(attachment.get("originalUrl") or attachment.get("url") or "")
-        parsed = urlsplit(path)
-        if parsed.scheme or parsed.netloc or not path.startswith("/uploads/ranobe/") or ".." in parsed.path.split("/") or parsed.query or parsed.fragment:
-            raise ValueError("Invalid attachment path")
-        if parsed.path != path:
-            raise ValueError("Invalid attachment path")
+        if validate_attachment is None:
+            from providers.libsocial.media_policy import attachment_path
+            attachment_path(path)
+        else:
+            validate_attachment(path)
         filename = f"{uid}.{ext}"
         if not valid_image_identifier(uid):
             raise ValueError("Invalid image identifier")
@@ -110,16 +108,8 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
         if data is None:
             if status:
                 status(f'  Downloading image {uid}.{ext}...')
-            failures = []
-            for host in HOSTS:
-                try:
-                    data = _fetch(f"https://{host}{path}")
-                    _verified_media(data, mime)
-                    break
-                except (httpx.HTTPError, ValueError) as exc:
-                    failures.append(f"{host}: {exc}")
-            else:
-                raise ValueError(f"Failed to download image {uid}: {'; '.join(failures)}")
+            data = (fetch_media or _legacy_media)(attachment)
+            _verified_media(data, mime)
             target.parent.mkdir(parents=True, exist_ok=True)
             temp = None
             try:

@@ -93,11 +93,11 @@ class ChapterImageTests(unittest.TestCase):
         response.iter_bytes.return_value = iter([b"x" * (16 * 1024 * 1024)])
         client = MagicMock()
         client.__enter__.return_value.stream.return_value.__enter__.return_value = response
-        with patch("core.download.images.httpx.Client", return_value=client):
+        with patch("providers.libsocial.media.httpx.Client", return_value=client):
             self.assertEqual(len(_fetch("https://ranobelib.me/test")), 16 * 1024 * 1024)
         response.iter_bytes.return_value = iter([b"x" * (16 * 1024 * 1024),
                                                   b"x" * (15 * 1024 * 1024)])
-        with patch("core.download.images.httpx.Client", return_value=client):
+        with patch("providers.libsocial.media.httpx.Client", return_value=client):
             with self.assertRaisesRegex(ValueError, "30 MiB"):
                 _fetch("https://ranobelib.me/test")
 
@@ -109,7 +109,7 @@ class ChapterImageTests(unittest.TestCase):
         response.is_redirect = False
         client = MagicMock()
         client.__enter__.return_value.stream.return_value.__enter__.return_value = response
-        with patch("core.download.images.httpx.Client", return_value=client):
+        with patch("providers.libsocial.media.httpx.Client", return_value=client):
             with self.assertRaisesRegex(ValueError, "30 MiB"):
                 _fetch("https://ranobelib.me/test")
         response.iter_bytes.assert_not_called()
