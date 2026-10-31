@@ -14,6 +14,10 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--branch', type=int, help='Translation branch ID')
     parser.add_argument('--limit', type=int, help='Download only first N chapters (for testing)')
     parser.add_argument('--output', type=Path, help='Output EPUB path (default: output/<id>.epub)')
+    parser.add_argument('--resume', action='store_true', help='Reuse verified cached chapters')
+    parser.add_argument('--cache-dir', type=Path, default=Path('output/.cache'))
+    parser.add_argument('--delay', type=float, default=1.0, help='Seconds between downloads')
+    parser.add_argument('--retries', type=int, default=5, help='Maximum attempts per chapter')
 
 
 def execute(args: argparse.Namespace) -> None:
@@ -29,7 +33,9 @@ def execute(args: argparse.Namespace) -> None:
             downloader.titles.get_title = lambda reference: title
             result = downloader.download(args.reference, target,
                                          branch_id=args.branch, limit=args.limit,
-                                         progress=report)
+                                         progress=report, resume=args.resume,
+                                         cache_dir=args.cache_dir, delay=args.delay,
+                                         retries=args.retries)
         print(f'Saved: {result}')
     except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as exc:
         raise SystemExit(f'Download failed: {exc}') from exc

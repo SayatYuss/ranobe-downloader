@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+import time
+
+from core.download.checkpoint import ChapterCheckpoint
+from core.download.retry import with_retries
 from pathlib import Path
 from typing import Callable
 
@@ -30,7 +34,11 @@ class BookDownloader:
 
     def download(self, reference: str, output: str | Path, *,
                  branch_id: int | None = None, limit: int | None = None,
-                 progress: Callable[[int, int, str], None] | None = None) -> Path:
+                 progress: Callable[[int, int, str], None] | None = None,
+                 resume: bool = False, cache_dir: str | Path = 'output/.cache',
+                 delay: float = 1.0, retries: int = 5) -> Path:
+        if delay < 0 or retries < 1:
+            raise ValueError('delay must be non-negative and retries must be positive')
         if limit is not None and limit < 1:
             raise ValueError('limit must be positive')
         title = self.titles.get_title(reference)
@@ -57,13 +65,27 @@ class BookDownloader:
             raise ValueError('No chapters in selected translation branch')
 
         rendered = []
+        checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
         for index, item in enumerate(selected, 1):
-            raw = self.contents.get_chapter(title.slug_url, volume=item.volume,
-                                            number=item.number, branch_id=branch_id)
-            if not isinstance(raw.content, dict):
+            data = checkpoints.load(item.id, volume=item.volume, number=item.number) if resume else None
+            if data is None:
+                raw = with_retries(
+                    lambda: self.contents.get_chapter(
+                        title.slug_url, volume=item.volume,
+                        number=item.number, branch_id=branch_id),
+                    attempts=retries,
+                )
+                data = raw.data
+                if not isinstance(raw.content, dict):
+                    raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
+                checkpoints.save(item.id, data, volume=item.volume, number=item.number)
+                if delay > 0 and index < len(selected):
+                    time.sleep(delay)
+            content = data.get('content')
+            if not isinstance(content, dict):
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
-            label = raw.title or item.name or f'Глава {item.number}'
-            rendered.append(EpubChapter(label, chapter_to_xhtml(label, raw.content)))
+            label = data.get('name') or item.name or f'Глава {item.number}'
+            rendered.append(EpubChapter(label, chapter_to_xhtml(label, content)))
             if progress is not None:
                 progress(index, len(selected), label)
 
