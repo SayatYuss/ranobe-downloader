@@ -12,6 +12,9 @@ dependencies = [
   "httpx>=0.27,<1",
   "keyring>=25,<27",
 ]
+[project.optional-dependencies]
+images = ["Pillow>=10,<13"]
+
 authors = [{name = "SayatYuss"}]
 classifiers = [
   "Development Status :: 3 - Alpha",
