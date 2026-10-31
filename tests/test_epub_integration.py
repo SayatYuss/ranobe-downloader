@@ -119,15 +119,38 @@ class EpubIntegrationTests(unittest.TestCase):
             self.assertEqual(len([path for path in archive.namelist()
                                   if path.startswith("OEBPS/chapter-")]), 2)
 
-    def test_paid_chapter_does_not_produce_partial_epub(self):
+    def test_paid_chapter_is_skipped_and_reported(self):
         self.payloads["2"] = {
             "id": 102, "name": "Вторая",
             "restricted_view": {"is_open": False, "price": 10}
         }
+        from core.download.statistics import DownloadStatistics
+        received = []
         destination = self.root / "novel.epub"
-        with self.assertRaisesRegex(ValueError, "paid_content"):
+        with patch("core.download.images._fetch", return_value=GIF):
+            self.downloader.download(
+                "100--book", destination, cache_dir=self.root / "cache",
+                delay=0, statistics=received.append,
+            )
+        with ZipFile(destination) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("OEBPS/chapter-0001.xhtml", archive.namelist())
+            self.assertNotIn("OEBPS/chapter-0002.xhtml", archive.namelist())
+        self.assertEqual(received[0].chapters, 1)
+        self.assertEqual(received[0].skipped_paid_chapters, ("1/2 — Глава 2",))
+
+    def test_all_paid_chapters_rejects_empty_book(self):
+        self.payloads["1"] = {
+            "id": 101, "name": "Первая",
+            "restricted_view": {"is_open": False, "price": 10}
+        }
+        self.payloads["2"] = {
+            "id": 102, "name": "Вторая",
+            "restricted_view": {"is_open": False, "price": 10}
+        }
+        with self.assertRaisesRegex(ValueError, "No accessible chapters"):
             self._download()
-        self.assertFalse(destination.exists())
+        self.assertFalse((self.root / "novel.epub").exists())
 
     def test_html_image_is_packaged(self):
         self.payloads["2"]["content"] = (

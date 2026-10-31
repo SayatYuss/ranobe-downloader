@@ -12,6 +12,7 @@ class DownloadStatistics:
     embedded_image_bytes: int
     epub_bytes: int
     cached_chapters: int = 0
+    skipped_paid_chapters: tuple[str, ...] = ()
 
     @property
     def saved_image_bytes(self) -> int:
