@@ -135,3 +135,28 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(result["status"], "COMPATIBLE")
             self.assertEqual(result["html_images"], 1)
 
+
+    def test_retry_unverified_on_resume(self):
+        import httpx
+        title = SimpleNamespace(id=7, slug_url="7--book", title="Book",
+                                authors=(), description="", cover_url=None)
+        chapter = SimpleNamespace(id=1, volume="1", number="1", index=1,
+                                  name="One", branches=[SimpleNamespace(branch_id=11)])
+        request = httpx.Request("GET", "https://example.org/chapter")
+        error = httpx.HTTPStatusError("limit", request=request,
+                                      response=httpx.Response(429, request=request))
+        with patch("core.compatibility_audit.TitleProvider") as tp, patch(
+            "core.compatibility_audit.ChapterProvider") as cp, patch(
+            "core.compatibility_audit.ChapterContentProvider") as dp:
+            tp.return_value.get_title.return_value = title
+            cp.return_value.get_chapters.return_value = [chapter]
+            dp.return_value.get_chapter.side_effect = error
+            first = audit_title(Mock(), "7", delay=0, retries=1)
+            self.assertEqual(first["unverified_chapter_ids"], [1])
+            dp.return_value.get_chapter.side_effect = None
+            dp.return_value.get_chapter.return_value = SimpleNamespace(
+                title="One", content={"type": "doc", "content": []})
+            second = audit_title(Mock(), "7", delay=0, retries=1, resume_state=first)
+            self.assertEqual(second["status"], "COMPATIBLE")
+            self.assertEqual((second["passed"], second["unverified"]), (1, 0))
+
