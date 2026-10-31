@@ -22,7 +22,7 @@ class WorkflowTests(unittest.TestCase):
         self.downloader.titles.get_title = Mock(return_value=SimpleNamespace(
             id=7, slug_url='7--example', title='Book', authors=('Author',), description='Summary'))
         self.downloader.contents.get_chapter = Mock(return_value=SimpleNamespace(
-            data={'id': 2, 'name': 'One', 'content': {'type': 'doc', 'content': [
+            data={'id': 888, 'volume': '1', 'number': '2', 'name': 'One', 'content': {'type': 'doc', 'content': [
                 {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hello'}]}]}},
             content={'type': 'doc', 'content': []}))
 
