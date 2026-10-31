@@ -13,6 +13,7 @@ from core.download.plan import DownloadPlan, make_translations
 from pathlib import Path
 from typing import Callable
 
+from core.chapter_content import ChapterContent, ChapterContentUnavailable
 from core.chapter_xhtml import chapter_to_xhtml
 from exporters.epub import EpubChapter, EpubExporter
 from providers.libsocial.chapter_content import ChapterContentProvider
@@ -115,12 +116,19 @@ class BookDownloader:
                     attempts=retries,
                 )
                 data = raw.data
+                if raw.unavailable_reason:
+                    raise ChapterContentUnavailable(
+                        f"Chapter {item.volume}/{item.number}: {raw.unavailable_reason}")
                 if not isinstance(raw.content, (dict, str)):
                     raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
                 checkpoints.save(item.id, data, volume=item.volume, number=item.number)
                 if delay > 0 and index < len(selected):
                     time.sleep(delay)
             content = data.get('content')
+            unavailable_reason = ChapterContent.from_api(data).unavailable_reason
+            if unavailable_reason:
+                raise ChapterContentUnavailable(
+                    f"Chapter {item.volume}/{item.number}: {unavailable_reason}")
             if not isinstance(content, (dict, str)):
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
