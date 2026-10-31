@@ -34,6 +34,28 @@ class EpubExporterTests(unittest.TestCase):
                 self.assertIn("Глава 2", nav)
                 self.assertIn("Привет &amp; мир", archive.read("OEBPS/chapter-0001.xhtml").decode())
 
+    def test_embedded_cover_and_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "cover.epub"
+            xhtml = chapter_to_xhtml("Chapter", {"type": "doc", "content": []})
+            cover = b"\\xff\\xd8\\xff" + b"fake-jpeg"
+            EpubExporter().export(target, title="Book", authors=("Writer",),
+                description="Description & details", chapters=[EpubChapter("Chapter", xhtml)],
+                cover=cover, cover_media_type="image/jpeg")
+            with ZipFile(target) as archive:
+                self.assertEqual(archive.read("OEBPS/cover.jpg"), cover)
+                package = archive.read("OEBPS/package.opf").decode()
+                self.assertIn('properties="cover-image"', package)
+                self.assertIn("<dc:creator>Writer</dc:creator>", package)
+                self.assertIn("Description &amp; details", package)
+
+    def test_reject_invalid_cover_type(self):
+        xhtml = chapter_to_xhtml("Chapter", {"type": "doc", "content": []})
+        with self.assertRaises(ValueError):
+            EpubExporter().export("unused.epub", title="Book",
+                chapters=[EpubChapter("Chapter", xhtml)],
+                cover=b"not-an-image", cover_media_type="image/gif")
+
     def test_reject_empty_chapters_and_bad_xhtml(self):
         exporter = EpubExporter()
         with self.assertRaises(ValueError):
