@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
+from hashlib import sha256
 import re
 from urllib.parse import urlsplit
 
-from core.download.images import HOSTS, FORMATS
+from core.download.images import HOSTS
 
 
 def _image_path(src: str) -> str:
@@ -70,16 +71,18 @@ def resolve_html_images(html: str, attachments) -> tuple[dict[str, str], list[st
         uid = lookup.get(path)
         if uid is None:
             match = re.fullmatch(
-                r"/uploads/ranobe/\d+/chapters/\d+/([0-9a-fA-F-]{36})\.([A-Za-z]+)",
-                path,
+                r"/uploads/ranobe/([A-Za-z0-9_-]+)/chapters/([0-9]+)/([A-Za-z0-9_.-]+)\\.(jpg|jpeg|png|gif|webp)",
+                path, flags=re.IGNORECASE,
             )
-            if match is None or match.group(2).lower() not in FORMATS:
+            if match is None:
                 raise ValueError(f"HTML image attachment missing: {path}")
-            uid = match.group(1)
+            # A stable hex ID is compatible with the shared image cache and EPUB exporter.
+            # Preserve the original path; never build the fetch URL from this identifier.
+            uid = sha256(path.encode("utf-8")).hexdigest()
             if not isinstance(attachments, list):
                 raise ValueError("HTML attachments must be a mutable list")
             attachments.append({
-                "name": uid, "extension": match.group(2).lower(),
+                "name": uid, "extension": match.group(4).lower(),
                 "originalUrl": path,
             })
             lookup[path] = uid
