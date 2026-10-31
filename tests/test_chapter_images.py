@@ -55,3 +55,30 @@ class ChapterImageTests(unittest.TestCase):
                      "originalUrl": "https://untrusted.example/image.gif"}]
             with self.assertRaisesRegex(ValueError, "Invalid attachment path"):
                 load_images(DOCUMENT, fake, Path(root), 4603475)
+
+    def test_named_image_identifier_is_packaged(self):
+        uid = "image_i9wg"
+        document = {"type": "doc", "content": [
+            {"type": "image", "attrs": {"images": [{"image": uid}]}}
+        ]}
+        attachments = [{"name": uid, "extension": "gif",
+                        "originalUrl": "/uploads/ranobe/book/chapters/123/image.gif"}]
+        with tempfile.TemporaryDirectory() as root:
+            with patch("core.download.images._fetch", return_value=GIF):
+                media = load_images(document, attachments, Path(root), 123)
+            self.assertIn(uid, media)
+            self.assertEqual(media[uid][0], "images/123-image_i9wg.gif")
+            chapter = EpubChapter("Test", chapter_to_xhtml(
+                "Test", document, images={uid: media[uid][0]}), tuple(media.values()))
+            destination = Path(root) / "named.epub"
+            EpubExporter().export(destination, title="Book", chapters=[chapter])
+            with ZipFile(destination) as archive:
+                self.assertEqual(archive.read("OEBPS/images/123-image_i9wg.gif"), GIF)
+
+    def test_image_identifier_rejects_unsafe_names(self):
+        from core.download.images import valid_image_identifier
+        self.assertTrue(valid_image_identifier("image_i9wg"))
+        self.assertTrue(valid_image_identifier(UUID))
+        for uid in ("../oops", "image/name", "image\\\\name", "image name",
+                    "", "x" * 129, "ö", "image.png"):
+            self.assertFalse(valid_image_identifier(uid), uid)
