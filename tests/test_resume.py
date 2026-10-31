@@ -28,9 +28,9 @@ class ResumeTests(unittest.TestCase):
             cache = ChapterCheckpoint(temp, 7, 10)
             self.assertIsNone(cache.load(1, volume="1", number="1"))
             cache.save(1, {"id": 999, "volume": "1", "number": "1", "content": DOC}, volume="1", number="1")
-            self.assertEqual(cache.load(1)["content"], DOC)
+            self.assertEqual(cache.load(1, volume="1", number="1")["content"], DOC)
             cache.path(1).write_text("broken JSON", encoding="utf-8")
-            self.assertIsNone(cache.load(1))
+            self.assertIsNone(cache.load(1, volume="1", number="1"))
             with self.assertRaises(ValueError):
                 cache.save(1, {"id": 2, "volume": "1", "number": "999", "content": DOC}, volume="1", number="1")
 
