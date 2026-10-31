@@ -52,8 +52,9 @@ class _SafeHtml(HTMLParser):
             's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
     VOID = {'br', 'hr'}
 
-    def __init__(self):
+    def __init__(self, html_images=None):
         super().__init__(convert_charrefs=True)
+        self.html_images = html_images or {}
         self.parts = []
         self.stack = []
         self.blocked = 0
@@ -62,7 +63,15 @@ class _SafeHtml(HTMLParser):
         if tag in {'script', 'style'}:
             self.blocked += 1
             self.stack.append(('blocked', tag))
-        elif tag in {'img', 'video', 'audio', 'iframe', 'svg', 'picture'}:
+        elif tag == 'img':
+            if self.blocked:
+                return
+            src = dict(attrs).get('src')
+            href = self.html_images.get(src)
+            if not href:
+                raise ValueError('HTML media requires attachment support: img (unresolved)')
+            self.parts.append(f'<img src="{escape(href, quote=True)}" alt="" />')
+        elif tag in {'video', 'audio', 'iframe', 'svg', 'picture'}:
             raise ValueError(f'HTML media requires attachment support: {tag}')
         elif tag in self.VOID:
             if not self.blocked:
@@ -97,7 +106,8 @@ class _SafeHtml(HTMLParser):
         return ''.join(self.parts)
 
 
-def chapter_to_xhtml(title: str, document: dict | str, language: str = 'ru', *, images: dict | None = None) -> str:
+def chapter_to_xhtml(title: str, document: dict | str, language: str = 'ru', *, images: dict | None = None,
+                     html_images: dict[str, str] | None = None) -> str:
     """Convert rich-text chapter to self-contained text-only XHTML.
 
     Unknown media types are rejected, not silently discarded.
@@ -108,7 +118,7 @@ def chapter_to_xhtml(title: str, document: dict | str, language: str = 'ru', *, 
         raise ValueError('Invalid language')
     name = escape(title)
     if isinstance(document, str):
-        parser = _SafeHtml()
+        parser = _SafeHtml(html_images=html_images)
         parser.feed(document)
         body = parser.finish()
     else:
