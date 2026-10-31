@@ -23,7 +23,9 @@ def fetch_image_url(url: str) -> bytes:
             return bytes(payload)
 
 
-def fetch_attachment(attachment: dict, fetch=fetch_image_url) -> bytes:
+def fetch_attachment(attachment: dict, fetch=None) -> bytes:
+    if fetch is None:
+        fetch = fetch_image_url
     path = str(attachment.get("originalUrl") or attachment.get("url") or "")
     errors = []
     for url in image_urls(path):
