@@ -99,7 +99,7 @@ class BookDownloader:
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
             media = load_images(content, data.get('attachments'), image_cache,
-                                int(data.get('id') or item.id)) if isinstance(content, dict) else {}
+                                int(data.get('id') or item.id), status=status) if isinstance(content, dict) else {}
             paths = {uid: image[0] for uid, image in media.items()}
             rendered.append(EpubChapter(
                 label, chapter_to_xhtml(label, content, images=paths),
