@@ -22,12 +22,15 @@ def optimize_image(data: bytes, media_type: str, *, quality: int = 85,
     with Image.open(BytesIO(data)) as source:
         if source.format != "PNG":
             raise ValueError("Expected PNG image")
-        # Never flatten transparency against an arbitrary background.
         if source.mode in ("RGBA", "LA") or "transparency" in source.info:
             rgba = source.convert("RGBA")
-            if rgba.getchannel("A").getextrema()[0] != 255:
+            # Preserve meaningful transparency; tiny alpha variations can be flattened.
+            if rgba.getchannel("A").getextrema()[0] < 250:
                 return data, media_type, "png"
-        rgb = source.convert("RGB")
+            background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+            rgb = Image.alpha_composite(background, rgba).convert("RGB")
+        else:
+            rgb = source.convert("RGB")
         if rgb.width > max_width:
             from PIL import Image as PILImage
             height = max(1, round(rgb.height * max_width / rgb.width))
