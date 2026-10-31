@@ -36,6 +36,28 @@ class ChapterContentTests(unittest.TestCase):
         self.assertEqual(chapter.content, structured)
         self.assertEqual(chapter.pages, [{"url": "/page.jpg"}])
 
+    def test_paid_unopened_chapter(self):
+        chapter = ChapterContent.from_api({
+            "id": 4693476, "restricted_view": {"is_open": False, "price": 10},
+        })
+        self.assertEqual(chapter.unavailable_reason, "paid_content")
+        self.assertEqual(chapter.restricted_view["price"], 10)
+
+    def test_purchased_chapter_with_content(self):
+        chapter = ChapterContent.from_api({
+            "content": {"type": "doc", "content": []},
+            "restricted_view": {"is_open": False, "price": 10},
+        })
+        self.assertIsNone(chapter.unavailable_reason)
+
+    def test_missing_content_without_restriction(self):
+        chapter = ChapterContent.from_api({"id": 42})
+        self.assertEqual(chapter.unavailable_reason, "missing_content")
+
+    def test_unknown_payload_type_stays_unsupported(self):
+        chapter = ChapterContent.from_api({"content": 123})
+        self.assertIsNone(chapter.unavailable_reason)
+
     def test_reject_invalid_number(self):
         fake = FakeClient({})
         with self.assertRaises(ValueError):

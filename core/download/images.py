@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
@@ -15,7 +16,13 @@ SIGNATURES = {"image/jpeg": lambda b: b.startswith(bytes.fromhex("ffd8ff")),
               "image/gif": lambda b: b.startswith((b"GIF87a", b"GIF89a")),
               "image/webp": lambda b: len(b) > 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP"}
 HOSTS = ("ranobelib.me", "img3.mixlib.me")
-MAX_SIZE = 15 * 1024 * 1024
+MAX_SIZE = 30 * 1024 * 1024
+IMAGE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
+
+
+def valid_image_identifier(uid: str) -> bool:
+    """Allow API-provided IDs while preventing path traversal and unsafe filenames."""
+    return isinstance(uid, str) and IMAGE_ID_PATTERN.fullmatch(uid) is not None
 
 
 def image_refs(document):
@@ -53,11 +60,14 @@ def _fetch(url):
             response.raise_for_status()
             if response.is_redirect:
                 raise ValueError("Image redirects not allowed")
+            advertised = response.headers.get("Content-Length")
+            if advertised is not None and advertised.isdecimal() and int(advertised) > MAX_SIZE:
+                raise ValueError(f"Image exceeds {MAX_SIZE // (1024 * 1024)} MiB")
             payload = bytearray()
             for chunk in response.iter_bytes():
                 payload.extend(chunk)
                 if len(payload) > MAX_SIZE:
-                    raise ValueError("Image exceeds 15 MiB")
+                    raise ValueError(f"Image exceeds {MAX_SIZE // (1024 * 1024)} MiB")
             return bytes(payload)
 
 
@@ -88,7 +98,7 @@ def load_images(document, attachments, cache_directory: Path, chapter_id: int, s
         if parsed.path != path:
             raise ValueError("Invalid attachment path")
         filename = f"{uid}.{ext}"
-        if any(c not in "0123456789abcdef-" for c in uid.lower()):
+        if not valid_image_identifier(uid):
             raise ValueError("Invalid image identifier")
         target = cache_directory / "images" / str(chapter_id) / filename
         data = target.read_bytes() if target.is_file() else None
