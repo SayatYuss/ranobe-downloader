@@ -33,7 +33,7 @@ class WorkflowTests(unittest.TestCase):
         plan = self.downloader.prepare('7')
         self.assertEqual([(t.branch_id, t.chapter_count) for t in plan.translations],
                          [(10, 2), (20, 1)])
-        self.downloader.download(plan, 'book.epub', branch_id=10,
+        self.downloader.download(plan, 'book.epub', branch_id=20,
                                  limit=1, delay=0, cache_dir=self.temp.name)
         self.downloader.titles.get_title.assert_called_once()
         self.downloader.chapters.get_chapters.assert_called_once()
