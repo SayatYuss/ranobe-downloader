@@ -15,7 +15,7 @@ class ChapterCheckpoint:
     def path(self, chapter_id: int) -> Path:
         return self.directory / f"{chapter_id}.json"
 
-    def load(self, chapter_id: int) -> dict | None:
+    def load(self, chapter_id: int, *, volume: str, number: str) -> dict | None:
         path = self.path(chapter_id)
         if not path.exists():
             return None
@@ -23,12 +23,21 @@ class ChapterCheckpoint:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeError):
             return None
-        if not isinstance(data, dict) or data.get("id") != chapter_id or not isinstance(data.get("content"), dict):
+        if not self._valid(data, volume=volume, number=number):
             return None
         return data
 
-    def save(self, chapter_id: int, data: dict) -> None:
-        if data.get("id") != chapter_id or not isinstance(data.get("content"), dict):
+    @staticmethod
+    def _valid(data: object, *, volume: str, number: str) -> bool:
+        return (
+            isinstance(data, dict)
+            and isinstance(data.get("content"), dict)
+            and str(data.get("volume")) == str(volume)
+            and str(data.get("number")) == str(number)
+        )
+
+    def save(self, chapter_id: int, data: dict, *, volume: str, number: str) -> None:
+        if not self._valid(data, volume=volume, number=number):
             raise ValueError("Chapter checkpoint does not match requested chapter")
         self.directory.mkdir(parents=True, exist_ok=True)
         temp_path = None
