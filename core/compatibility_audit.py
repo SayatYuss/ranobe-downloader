@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from core.chapter_xhtml import chapter_to_xhtml
+from core.download.images import image_refs, FORMATS
 from providers.libsocial.titles import TitleProvider
 from providers.libsocial.chapters import ChapterProvider
 from providers.libsocial.chapter_content import ChapterContentProvider
@@ -98,10 +99,22 @@ def audit_title(client, reference: str, *, sample: int = 10,
             content = with_retries(lambda: ChapterContentProvider(client).get_chapter(
                 title.slug_url, volume=chapter.volume, number=chapter.number,
                 branch_id=branch_id), attempts=retries)
-            if not isinstance(content.content, dict):
+            if not isinstance(content.content, (dict, str)):
                 raise ValueError(f"Unsupported content format: {type(content.content).__name__}")
-            _inspect(content.content, types, marks)
-            chapter_to_xhtml(content.title or chapter.name or coordinate, content.content)
+            images = {}
+            if isinstance(content.content, dict):
+                _inspect(content.content, types, marks)
+                attachments = {a.get("name"): a for a in content.data.get("attachments", [])
+                               if isinstance(a, dict)}
+                for uid in image_refs(content.content):
+                    attached = attachments.get(uid)
+                    if attached is None:
+                        raise ValueError(f"Missing attachment for image: {uid}")
+                    if str(attached.get("extension", "")).lower().lstrip(".") not in FORMATS:
+                        raise ValueError(f"Unsupported attachment type: {uid}")
+                    images[uid] = f"images/{uid}.gif"
+            chapter_to_xhtml(content.title or chapter.name or coordinate,
+                             content.content, images=images)
             result["passed"] += 1
         except Exception as exc:
             # Preserve partial audit results; do not expose full server payloads.
