@@ -4,7 +4,7 @@ from html.parser import HTMLParser
 from xml.etree import ElementTree
 
 
-def _render(node: dict) -> str:
+def _render(node: dict, images: dict | None = None) -> str:
     kind = node.get('type')
     if kind == 'text':
         result = escape(str(node.get('text') or ''))
@@ -13,6 +13,18 @@ def _render(node: dict) -> str:
             if tag:
                 result = f'<{tag}>{result}</{tag}>'
         return result
+    if kind == 'image':
+        refs = (node.get('attrs') or {}).get('images') or []
+        if not refs:
+            raise ValueError('Image node has no images')
+        parts = []
+        for item in refs:
+            uid = item.get('image') if isinstance(item, dict) else None
+            if not isinstance(uid, str) or not images or uid not in images:
+                raise ValueError(f'Image attachment not resolved: {uid}')
+            href = images[uid]
+            parts.append(f'<img src="{escape(href, quote=True)}" alt="" />')
+        return ''.join(parts)
     if kind == 'hardBreak':
         return '<br />'
     if kind == 'horizontalRule':
@@ -29,7 +41,7 @@ def _render(node: dict) -> str:
     children = node.get('content') or []
     if not isinstance(children, list):
         raise ValueError('Expected content list')
-    inner = ''.join(_render(item) for item in children)
+    inner = ''.join(_render(item, images) for item in children)
     return inner if tag is None else f'<{tag}>{inner}</{tag}>'
 
 
@@ -85,7 +97,7 @@ class _SafeHtml(HTMLParser):
         return ''.join(self.parts)
 
 
-def chapter_to_xhtml(title: str, document: dict | str, language: str = 'ru') -> str:
+def chapter_to_xhtml(title: str, document: dict | str, language: str = 'ru', *, images: dict | None = None) -> str:
     """Convert rich-text chapter to self-contained text-only XHTML.
 
     Unknown media types are rejected, not silently discarded.
@@ -100,7 +112,7 @@ def chapter_to_xhtml(title: str, document: dict | str, language: str = 'ru') -> 
         parser.feed(document)
         body = parser.finish()
     else:
-        body = _render(document)
+        body = _render(document, images)
     result = ('<?xml version="1.0" encoding="utf-8"?>\n'
               f'<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{language}">'
               f'<head><title>{name}</title></head><body><h1>{name}</h1>{body}</body></html>')

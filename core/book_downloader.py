@@ -6,6 +6,7 @@ import time
 
 from core.download.checkpoint import ChapterCheckpoint
 from core.download.retry import with_retries
+from core.download.images import load_images
 from pathlib import Path
 from typing import Callable
 
@@ -38,12 +39,21 @@ class BookDownloader:
                  branch_id: int | None = None, limit: int | None = None,
                  progress: Callable[[int, int, str], None] | None = None,
                  resume: bool = False, cache_dir: str | Path = 'output/.cache',
-                 delay: float = 1.0, retries: int = 5) -> Path:
+                 delay: float = 1.0, retries: int = 5,
+                 status: Callable[[str], None] | None = None,
+                 image_mode: str = 'original', image_quality: int = 85,
+                 image_max_width: int = 1600) -> Path:
+        if image_mode not in ('original', 'optimized') or not 1 <= image_quality <= 100 or image_max_width < 1:
+            raise ValueError('Invalid image optimization settings')
         if delay < 0 or retries < 1:
             raise ValueError('delay must be non-negative and retries must be positive')
         if limit is not None and limit < 1:
             raise ValueError('limit must be positive')
+        if status:
+            status('Fetching title metadata...')
         title = self.titles.get_title(reference)
+        if status:
+            status('Fetching chapter index...')
         chapter_list = self.chapters.get_chapters(title.slug_url)
         if not chapter_list:
             raise ValueError('No chapters found')
@@ -66,9 +76,14 @@ class BookDownloader:
         if not selected:
             raise ValueError('No chapters in selected translation branch')
 
+        if status:
+            status(f'Selected {len(selected)} chapters; branch={branch_id}')
         rendered = []
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
+        image_cache = Path(cache_dir) / str(title.id) / f"branch-{branch_id if branch_id is not None else 'default'}"
         for index, item in enumerate(selected, 1):
+            if status:
+                status(f'[{index}/{len(selected)}] Loading chapter {item.volume}/{item.number}...')
             data = checkpoints.load(item.id, volume=item.volume, number=item.number) if resume else None
             if data is None:
                 raw = with_retries(
@@ -87,10 +102,20 @@ class BookDownloader:
             if not isinstance(content, (dict, str)):
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
-            rendered.append(EpubChapter(label, chapter_to_xhtml(label, content)))
+            media = load_images(content, data.get('attachments'), image_cache,
+                                int(data.get('id') or item.id), status=status,
+                                image_mode=image_mode, image_quality=image_quality,
+                                image_max_width=image_max_width) if isinstance(content, dict) else {}
+            paths = {uid: image[0] for uid, image in media.items()}
+            rendered.append(EpubChapter(
+                label, chapter_to_xhtml(label, content, images=paths),
+                images=tuple(media.values()),
+            ))
             if progress is not None:
                 progress(index, len(selected), label)
 
+        if status:
+            status('Building EPUB...')
         cover = None
         cover_type = None
         cover_url = getattr(title, 'cover_url', None)
