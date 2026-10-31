@@ -45,6 +45,15 @@ class HtmlImagesTests(unittest.TestCase):
         _, ids = resolve_html_images(html, self.attachments)
         self.assertEqual(ids, [self.uid])
 
+    def test_legacy_url_without_attachments(self):
+        attachments = []
+        sources, ids = resolve_html_images(
+            '<img src="' + self.path + '">', attachments,
+        )
+        self.assertEqual(ids, [self.uid])
+        self.assertEqual(sources[self.path], self.uid)
+        self.assertEqual(attachments[0]["originalUrl"], self.path)
+
     def test_non_image_html_unchanged(self):
         self.assertEqual(resolve_html_images("<p>Text</p>", []), ({}, []))
 
