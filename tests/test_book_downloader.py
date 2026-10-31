@@ -79,6 +79,17 @@ class WorkflowTests(unittest.TestCase):
         fractional.number = "13.4"
         items.append(fractional)
         self.downloader.chapters.get_chapters = Mock(return_value=items)
+
+        def chapter_response(reference, *, volume, number, branch_id):
+            return SimpleNamespace(data={
+                "id": 888, "volume": volume, "number": number,
+                "name": f"Chapter {number}",
+                "content": {"type": "doc", "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": "Hello"}]}
+                ]},
+            })
+
+        self.downloader.contents.get_chapter = Mock(side_effect=chapter_response)
         self.downloader.download(
             "7", "book.epub", branch_id=10,
             chapter_from="13.4", chapter_to="45",
