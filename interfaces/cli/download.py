@@ -43,7 +43,7 @@ def _print_summary(stats) -> None:
     print(f'  Original images: {_format_size(stats.original_image_bytes)}')
     print(f'  Embedded images: {_format_size(stats.embedded_image_bytes)}')
     print(f'  Image savings: {_format_size(stats.saved_image_bytes)} ({stats.saved_image_percent:.1f}%)')
-    print(f'  EPUB size: {_format_size(stats.epub_bytes)}', flush=True)
+    print(f'  Output size: {_format_size(stats.epub_bytes)}', flush=True)
 
 
 def execute(args: argparse.Namespace) -> None:
