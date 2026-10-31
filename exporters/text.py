@@ -75,6 +75,10 @@ class HtmlExporter:
                 if mime not in {"image/png", "image/jpeg", "image/gif", "image/webp"}:
                     raise ValueError("Invalid HTML image type")
                 element.set("src", f"data:{mime};base64,{b64encode(payload).decode('ascii')}")
+            # Strip XHTML namespaces for ordinary standalone HTML output.
+            for element in body.iter():
+                if isinstance(element.tag, str) and element.tag.startswith(XHTML):
+                    element.tag = element.tag[len(XHTML):]
             sections.append('<section class="chapter">' + "".join(
                 ET.tostring(child, encoding="unicode", method="html") for child in body
             ) + "</section>")
