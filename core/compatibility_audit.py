@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
+from pathlib import Path
 import time
 import httpx
 
 from core.chapter_xhtml import chapter_to_xhtml
-from core.download.images import image_refs, FORMATS
+from core.download.images import image_refs, FORMATS, load_images
+from core.download.html_images import resolve_html_images
 from core.download.plan import make_translations
 from urllib.parse import urlsplit
 from providers.libsocial.titles import TitleProvider
@@ -58,7 +59,9 @@ def audit_title(client, reference: str, *, sample: int = 10,
                 retries: int = 3, mode: str | None = None,
                 delay: float = 1.0,
                 progress: Callable[[dict[str, Any], int, int], None] | None = None,
-                resume_state: dict[str, Any] | None = None) -> dict[str, Any]:
+                resume_state: dict[str, Any] | None = None,
+                check_images: bool = False,
+                image_cache_dir: str | Path = 'output/.cache/audit') -> dict[str, Any]:
     if mode is not None and mode not in ('metadata', 'sample', 'full'):
         raise ValueError('Invalid audit mode')
     if mode == 'metadata':
@@ -91,6 +94,8 @@ def audit_title(client, reference: str, *, sample: int = 10,
         "sampled": 0, "passed": 0, "failed": 0, "unverified": 0,
         "node_types": {}, "mark_types": {}, "issues": [],
         "status": "NOT_TESTED" if metadata_only else "COMPATIBLE",
+        "unverified_chapter_ids": [], "html_images": 0, "content_formats": {},
+        "check_images": check_images,
     }
     if len(available) > 1 and branch_id is None:
         result["issues"].append("Multiple branches available: use --branch for a specific translation")
@@ -111,21 +116,36 @@ def audit_title(client, reference: str, *, sample: int = 10,
     result["planned_chapter_ids"] = [chapter.id for chapter in inspected]
     result["completed_chapter_ids"] = []
     result["elapsed_seconds"] = 0.0
+    result["check_images"] = check_images
     completed = set()
     if resume_state is not None:
         if (resume_state.get("title_id") != title.id
                 or resume_state.get("selected_branch") != branch_id
                 or resume_state.get("audit_mode") != result["audit_mode"]
-                or resume_state.get("planned_chapter_ids") != result["planned_chapter_ids"]):
+                or resume_state.get("planned_chapter_ids") != result["planned_chapter_ids"]
+                or resume_state.get("check_images", False) != check_images):
             raise ValueError("Saved audit does not match title, branch or chapter index")
         completed = set(resume_state.get("completed_chapter_ids", []))
-        if len(completed) != len(resume_state.get("completed_chapter_ids", [])):
+        retry_ids = set(resume_state.get("unverified_chapter_ids", []))
+        if not retry_ids.issubset(completed):
+            raise ValueError("Unverified chapter IDs are not completed chapters")
+        completed.difference_update(retry_ids)
+        if len(set(resume_state.get("completed_chapter_ids", []))) != len(resume_state.get("completed_chapter_ids", [])):
             raise ValueError("Duplicate completed chapter IDs")
         if not completed.issubset(set(result["planned_chapter_ids"])):
             raise ValueError("Saved audit contains unknown chapter IDs")
         keys = ("sampled", "passed", "failed", "unverified", "issues",
-                "node_types", "mark_types", "completed_chapter_ids", "elapsed_seconds")
+                "node_types", "mark_types", "completed_chapter_ids", "elapsed_seconds",
+                "html_images", "content_formats")
         result.update({key: resume_state[key] for key in keys if key in resume_state})
+        if result["sampled"] != len(resume_state.get("completed_chapter_ids", [])) or result["passed"] + result["failed"] + result["unverified"] != result["sampled"]:
+            raise ValueError("Saved audit counters do not match completed chapters")
+        result["completed_chapter_ids"] = [i for i in result["completed_chapter_ids"] if i not in retry_ids]
+        result["sampled"] -= len(retry_ids)
+        result["unverified"] -= len(retry_ids)
+        if retry_ids:
+            result["issues"] = [issue for issue in result["issues"] if not any(issue.startswith(f"Chapter {c.volume}/{c.number}: unavailable") for c in inspected if c.id in retry_ids)]
+        result["unverified_chapter_ids"] = []
         if result["sampled"] != len(completed) or result["passed"] + result["failed"] + result["unverified"] != len(completed):
             raise ValueError("Saved audit counters do not match completed chapters")
         types.update(result["node_types"])
@@ -146,18 +166,38 @@ def audit_title(client, reference: str, *, sample: int = 10,
                 branch_id=branch_id), attempts=retries)
             if not isinstance(content.content, (dict, str)):
                 raise ValueError(f"Unsupported content format: {type(content.content).__name__}")
-            images = {}
+            attachments = list((getattr(content, "data", None) or {}).get("attachments") or [])
+            image_document = content.content
+            html_sources = {}
             if isinstance(content.content, dict):
                 _inspect(content.content, types, marks)
-                attachments = {a.get("name"): a for a in getattr(content, "data", {}).get("attachments", [])
-                               if isinstance(a, dict)}
-                for uid in image_refs(content.content):
-                    attached = attachments.get(uid)
-                    if attached is None:
+                refs = image_refs(content.content)
+                result["content_formats"]["structured"] = result["content_formats"].get("structured", 0) + 1
+            else:
+                html_sources, refs = resolve_html_images(content.content, attachments)
+                image_document = {"type": "doc", "content": [
+                    {"type": "image", "attrs": {"images": [{"image": uid}]}}
+                    for uid in refs
+                ]}
+                result["content_formats"]["html"] = result["content_formats"].get("html", 0) + 1
+                result["html_images"] += len(html_sources)
+            if check_images:
+                media = load_images(
+                    image_document, attachments, Path(image_cache_dir) / str(title.id),
+                    int(getattr(content, "data", {}).get("id") or chapter.id),
+                )
+                paths = {uid: value[0] for uid, value in media.items()}
+            else:
+                by_name = {a.get("name"): a for a in attachments if isinstance(a, dict)}
+                paths = {}
+                for uid in refs:
+                    attachment = by_name.get(uid)
+                    if attachment is None:
                         raise ValueError(f"Missing attachment for image: {uid}")
-                    if str(attached.get("extension", "")).lower().lstrip(".") not in FORMATS:
+                    ext = str(attachment.get("extension") or "").lower().lstrip(".")
+                    if ext not in FORMATS:
                         raise ValueError(f"Unsupported attachment type: {uid}")
-                    path = str(attached.get("originalUrl") or attached.get("url") or "")
+                    path = str(attachment.get("originalUrl") or attachment.get("url") or "")
                     parsed = urlsplit(path)
                     if (parsed.scheme or parsed.netloc or not path.startswith("/uploads/ranobe/")
                             or ".." in parsed.path.split("/") or parsed.query or parsed.fragment
@@ -165,12 +205,14 @@ def audit_title(client, reference: str, *, sample: int = 10,
                         raise ValueError(f"Invalid attachment path: {uid}")
                     if any(ch not in "0123456789abcdef-" for ch in uid.lower()):
                         raise ValueError(f"Invalid image identifier: {uid}")
-                    images[uid] = f"images/{uid}.{str(attached.get('extension')).lower().lstrip('.')}"
+                    paths[uid] = f"images/{uid}.{ext}"
+            html_paths = {src: paths[uid] for src, uid in html_sources.items()}
             chapter_to_xhtml(content.title or chapter.name or coordinate,
-                             content.content, images=images)
+                             content.content, images=paths, html_images=html_paths)
             result["passed"] += 1
         except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.NetworkError) as exc:
             result['unverified'] += 1
+            result['unverified_chapter_ids'].append(chapter.id)
             result['issues'].append(f'Chapter {coordinate}: unavailable ({type(exc).__name__}: {exc})')
         except Exception as exc:
             # Preserve partial audit results; do not expose full server payloads.
