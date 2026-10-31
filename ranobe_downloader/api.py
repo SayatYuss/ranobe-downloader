@@ -31,6 +31,15 @@ class Book:
     chapter_count: int
     _plan: DownloadPlan
 
+    def list_chapters(self, branch_id: int | None = None) -> tuple[dict, ...]:
+        """Chapter index metadata; no chapter content is downloaded."""
+        from core.book_downloader import _chapter_order
+        chapters = sorted((ch for ch in self._plan.chapters if branch_id is None
+                           or any(b.branch_id == branch_id for b in ch.branches)),
+                          key=_chapter_order)
+        return tuple({"volume": str(ch.volume), "number": str(ch.number),
+                      "name": ch.name} for ch in chapters)
+
 
 class Downloader:
     """Create a reusable downloader, optionally with an external content backend.
@@ -73,7 +82,10 @@ class Downloader:
 
     def download(self, book: Book | str, *, format: ExportFormat = "epub",
                  output: str | Path | None = None, branch_id: int | None = None,
-                 limit: int | None = None, resume: bool = False,
+                 limit: int | None = None,
+                 chapter_from: str | int | None = None,
+                 chapter_to: str | int | None = None,
+                 resume: bool = False,
                  cache_dir: str | Path = "output/.cache", delay: float = 1.0,
                  retries: int = 5, image_mode: str = "original",
                  image_quality: int = 85, image_max_width: int = 1600,
@@ -115,6 +127,7 @@ class Downloader:
             try:
                 return self._backend.download(
                 book._plan, output, branch_id=branch_id, limit=limit,
+                chapter_from=chapter_from, chapter_to=chapter_to,
                 progress=progress, resume=resume, cache_dir=cache_dir,
                 delay=delay, retries=retries, status=status,
                 image_mode=image_mode, image_quality=image_quality,
