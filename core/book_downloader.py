@@ -125,15 +125,16 @@ class BookDownloader:
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
             html_sources = {}
+            attachments = list(data.get('attachments') or [])
             if isinstance(content, str):
-                html_sources, uids = resolve_html_images(content, data.get('attachments'))
+                html_sources, uids = resolve_html_images(content, attachments)
                 image_document = {'type': 'doc', 'content': [
                     {'type': 'image', 'attrs': {'images': [{'image': uid}]}}
                     for uid in uids
                 ]}
             else:
                 image_document = content
-            media = load_images(image_document, data.get('attachments'), image_cache,
+            media = load_images(image_document, attachments, image_cache,
                                 int(data.get('id') or item.id), status=status,
                                 image_mode=image_mode, image_quality=image_quality,
                                 image_max_width=image_max_width,
