@@ -160,3 +160,23 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(second["status"], "COMPATIBLE")
             self.assertEqual((second["passed"], second["unverified"]), (1, 0))
 
+
+    def test_check_images_calls_shared_loader(self):
+        title = SimpleNamespace(id=7, slug_url="7--book", title="Book",
+                                authors=(), description="", cover_url=None)
+        chapter = SimpleNamespace(id=1, volume="1", number="1", index=1,
+                                  name="One", branches=[SimpleNamespace(branch_id=11)])
+        with patch("core.compatibility_audit.TitleProvider") as tp, patch(
+            "core.compatibility_audit.ChapterProvider") as cp, patch(
+            "core.compatibility_audit.ChapterContentProvider") as dp, patch(
+            "core.compatibility_audit.load_images") as loader:
+            tp.return_value.get_title.return_value = title
+            cp.return_value.get_chapters.return_value = [chapter]
+            dp.return_value.get_chapter.return_value = SimpleNamespace(
+                title="One", content={"type": "doc", "content": []},
+                data={"id": 1, "attachments": []})
+            loader.return_value = {}
+            result = audit_title(Mock(), "7", delay=0, check_images=True)
+            self.assertEqual(result["status"], "COMPATIBLE")
+            loader.assert_called_once()
+
