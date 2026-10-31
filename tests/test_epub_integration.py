@@ -137,7 +137,7 @@ class EpubIntegrationTests(unittest.TestCase):
             self.assertIn("OEBPS/chapter-0001.xhtml", archive.namelist())
             self.assertNotIn("OEBPS/chapter-0002.xhtml", archive.namelist())
         self.assertEqual(received[0].chapters, 1)
-        self.assertEqual(received[0].skipped_paid_chapters, ("1/2 — Вторая",))
+        self.assertEqual(received[0].skipped_paid_chapters, ("1/2 — Глава 2",))
 
     def test_all_paid_chapters_rejects_empty_book(self):
         self.payloads["1"] = {
