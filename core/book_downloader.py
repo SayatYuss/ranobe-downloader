@@ -6,6 +6,7 @@ import time
 
 from core.download.checkpoint import ChapterCheckpoint
 from core.download.retry import with_retries
+from core.download.images import load_images
 from pathlib import Path
 from typing import Callable
 
@@ -68,6 +69,7 @@ class BookDownloader:
 
         rendered = []
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
+        image_cache = Path(cache_dir) / str(title.id) / f"branch-{branch_id if branch_id is not None else 'default'}"
         for index, item in enumerate(selected, 1):
             data = checkpoints.load(item.id, volume=item.volume, number=item.number) if resume else None
             if data is None:
@@ -87,7 +89,13 @@ class BookDownloader:
             if not isinstance(content, (dict, str)):
                 raise ValueError(f'Chapter {item.volume}/{item.number}: unsupported content')
             label = data.get('name') or item.name or f'Глава {item.number}'
-            rendered.append(EpubChapter(label, chapter_to_xhtml(label, content)))
+            media = load_images(content, data.get('attachments'), image_cache,
+                                int(data.get('id') or item.id)) if isinstance(content, dict) else {}
+            paths = {uid: image[0] for uid, image in media.items()}
+            rendered.append(EpubChapter(
+                label, chapter_to_xhtml(label, content, images=paths),
+                images=tuple(media.values()),
+            ))
             if progress is not None:
                 progress(index, len(selected), label)
 
