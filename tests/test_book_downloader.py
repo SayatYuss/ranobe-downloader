@@ -23,7 +23,8 @@ class WorkflowTests(unittest.TestCase):
             id=7, slug_url='7--example', title='Book', authors=('Author',), description='Summary'))
         self.downloader.contents.get_chapter = Mock(return_value=SimpleNamespace(
             data={'id': 2, 'name': 'One', 'content': {'type': 'doc', 'content': [
-                {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hello'}]}]}}))
+                {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hello'}]}]}},
+            content={'type': 'doc', 'content': []}))
 
     def test_ambiguous_branch_fails_before_download(self):
         self.downloader.chapters.get_chapters = Mock(return_value=[chapter(1, [10, 20])])
