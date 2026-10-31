@@ -2,7 +2,6 @@
 import argparse
 import json
 import os
-import time
 import sys
 from pathlib import Path
 
@@ -58,10 +57,11 @@ def execute(args):
         for reference in args.references:
             previous = next((r for r in saved_reports
                              if r.get("reference") == reference), None)
-            started = time.monotonic()
 
             def on_progress(state, current, total):
                 state["reference"] = reference
+                if not any(r is state for r in reports):
+                    reports.append(state)
                 elapsed = state["elapsed_seconds"]
                 eta = elapsed / current * (total - current) if current else 0
                 print(f"[{current}/{total}] {current / total:.1%} "
@@ -83,7 +83,8 @@ def execute(args):
                 report = {"reference": reference, "status": "ERROR", "issues": [
                     f"{type(exc).__name__}: {exc}"]}
             report["reference"] = reference
-            reports.append(report)
+            if not any(r is report for r in reports):
+                reports.append(report)
             save_reports()
             label = report["status"]
             if use_color:
