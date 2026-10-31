@@ -71,7 +71,7 @@ def resolve_html_images(html: str, attachments) -> tuple[dict[str, str], list[st
         uid = lookup.get(path)
         if uid is None:
             match = re.fullmatch(
-                r"/uploads/ranobe/([A-Za-z0-9_-]+)/chapters/([0-9]+)/([A-Za-z0-9_.-]+)\\.(jpg|jpeg|png|gif|webp)",
+                r"/uploads/ranobe/([A-Za-z0-9_-]+)/chapters/([0-9]+)/([A-Za-z0-9_.-]+)\.(jpg|jpeg|png|gif|webp)",
                 path, flags=re.IGNORECASE,
             )
             if match is None:
