@@ -8,6 +8,7 @@ from pathlib import Path
 import time
 import httpx
 
+from core.chapter_content import ChapterContentUnavailable
 from core.chapter_xhtml import chapter_to_xhtml
 from core.download.images import image_refs, FORMATS, load_images, valid_image_identifier
 from core.download.html_images import resolve_html_images
@@ -168,6 +169,8 @@ def audit_title(client, reference: str, *, sample: int = 10,
             content = with_retries(lambda: ChapterContentProvider(client).get_chapter(
                 title.slug_url, volume=chapter.volume, number=chapter.number,
                 branch_id=branch_id), attempts=retries)
+            if getattr(content, "unavailable_reason", None):
+                raise ChapterContentUnavailable(content.unavailable_reason)
             if not isinstance(content.content, (dict, str)):
                 raise ValueError(f"Unsupported content format: {type(content.content).__name__}")
             attachments = list((getattr(content, "data", None) or {}).get("attachments") or [])
@@ -214,6 +217,10 @@ def audit_title(client, reference: str, *, sample: int = 10,
             chapter_to_xhtml(content.title or chapter.name or coordinate,
                              content.content, images=paths, html_images=html_paths)
             result["passed"] += 1
+        except ChapterContentUnavailable as exc:
+            result["unverified"] += 1
+            result["unverified_chapter_ids"].append(chapter.id)
+            result["issues"].append(f"Chapter {coordinate}: unavailable ({exc.reason})")
         except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.NetworkError) as exc:
             result['unverified'] += 1
             result['unverified_chapter_ids'].append(chapter.id)
