@@ -7,6 +7,7 @@ import time
 from core.download.checkpoint import ChapterCheckpoint
 from core.download.retry import with_retries
 from core.download.images import load_images
+from core.download.statistics import DownloadStatistics
 from pathlib import Path
 from typing import Callable
 
@@ -42,7 +43,8 @@ class BookDownloader:
                  delay: float = 1.0, retries: int = 5,
                  status: Callable[[str], None] | None = None,
                  image_mode: str = 'original', image_quality: int = 85,
-                 image_max_width: int = 1600) -> Path:
+                 image_max_width: int = 1600,
+                 statistics: Callable[[DownloadStatistics], None] | None = None) -> Path:
         if image_mode not in ('original', 'optimized') or not 1 <= image_quality <= 100 or image_max_width < 1:
             raise ValueError('Invalid image optimization settings')
         if delay < 0 or retries < 1:
@@ -79,12 +81,24 @@ class BookDownloader:
         if status:
             status(f'Selected {len(selected)} chapters; branch={branch_id}')
         rendered = []
+        image_count = 0
+        original_image_bytes = 0
+        embedded_image_bytes = 0
+        cached_chapters = 0
+
+        def record_image(original_size: int, embedded_size: int) -> None:
+            nonlocal image_count, original_image_bytes, embedded_image_bytes
+            image_count += 1
+            original_image_bytes += original_size
+            embedded_image_bytes += embedded_size
         checkpoints = ChapterCheckpoint(cache_dir, title.id, branch_id)
         image_cache = Path(cache_dir) / str(title.id) / f"branch-{branch_id if branch_id is not None else 'default'}"
         for index, item in enumerate(selected, 1):
             if status:
                 status(f'[{index}/{len(selected)}] Loading chapter {item.volume}/{item.number}...')
             data = checkpoints.load(item.id, volume=item.volume, number=item.number) if resume else None
+            if data is not None:
+                cached_chapters += 1
             if data is None:
                 raw = with_retries(
                     lambda: self.contents.get_chapter(
@@ -105,7 +119,8 @@ class BookDownloader:
             media = load_images(content, data.get('attachments'), image_cache,
                                 int(data.get('id') or item.id), status=status,
                                 image_mode=image_mode, image_quality=image_quality,
-                                image_max_width=image_max_width) if isinstance(content, dict) else {}
+                                image_max_width=image_max_width,
+                                image_stats=record_image) if isinstance(content, dict) else {}
             paths = {uid: image[0] for uid, image in media.items()}
             rendered.append(EpubChapter(
                 label, chapter_to_xhtml(label, content, images=paths),
@@ -125,8 +140,18 @@ class BookDownloader:
             except (httpx.HTTPError, ValueError) as exc:
                 print(f'Cover skipped: {exc}')
 
-        return self.exporter.export(
+        result = self.exporter.export(
             output, title=title.title, authors=title.authors, chapters=rendered,
             description=title.description, identifier=f'ranobelib:{title.id}',
             cover=cover, cover_media_type=cover_type,
         )
+        if statistics is not None:
+            output_path = Path(result)
+            statistics(DownloadStatistics(
+                chapters=len(rendered), images=image_count,
+                original_image_bytes=original_image_bytes,
+                embedded_image_bytes=embedded_image_bytes,
+                epub_bytes=output_path.stat().st_size if output_path.is_file() else 0,
+                cached_chapters=cached_chapters,
+            ))
+        return result
