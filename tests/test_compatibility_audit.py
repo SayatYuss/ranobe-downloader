@@ -205,3 +205,39 @@ class AuditTests(unittest.TestCase):
             tp.assert_not_called()
             cp.assert_not_called()
             self.assertEqual(dp.return_value.get_chapter.call_count, 2)
+
+    def test_paid_chapter_is_unverified_and_resume_retries(self):
+        from core.chapter_content import ChapterContent
+        title = SimpleNamespace(id=254258, slug_url="254258--monstre-invangsta",
+                                title="Monster", authors=(), description="", cover_url=None)
+        chapter = SimpleNamespace(id=4693476, volume="1", number="49", index=49,
+                                  name="Biceps", branches=[])
+        with patch("core.compatibility_audit.ChapterContentProvider") as dp:
+            dp.return_value.get_chapter.return_value = ChapterContent.from_api({
+                "id": 4693476, "restricted_view": {"is_open": False, "price": 10}})
+            first = audit_title(Mock(), title.slug_url, prepared=(title, [chapter]), delay=0)
+            self.assertEqual((first["passed"], first["failed"], first["unverified"]), (0, 0, 1))
+            self.assertEqual(first["status"], "INCONCLUSIVE")
+            self.assertEqual(first["unverified_chapter_ids"], [4693476])
+            self.assertIn("paid_content", first["issues"][0])
+            dp.return_value.get_chapter.return_value = ChapterContent.from_api({
+                "id": 4693476, "content": {"type": "doc", "content": []},
+                "restricted_view": {"is_open": False, "price": 10}})
+            second = audit_title(Mock(), title.slug_url, prepared=(title, [chapter]),
+                                 resume_state=first, delay=0)
+            self.assertEqual((second["passed"], second["failed"], second["unverified"]), (1, 0, 0))
+            self.assertEqual(second["status"], "COMPATIBLE")
+            self.assertEqual(second["issues"], [])
+
+    def test_missing_content_is_unverified(self):
+        from core.chapter_content import ChapterContent
+        title = SimpleNamespace(id=254258, slug_url="254258--monstre-invangsta",
+                                title="Monster", authors=(), description="", cover_url=None)
+        chapter = SimpleNamespace(id=42, volume="1", number="1", index=1,
+                                  name="One", branches=[])
+        with patch("core.compatibility_audit.ChapterContentProvider") as dp:
+            dp.return_value.get_chapter.return_value = ChapterContent.from_api({"id": 42})
+            result = audit_title(Mock(), title.slug_url, prepared=(title, [chapter]), delay=0)
+            self.assertEqual(result["status"], "INCONCLUSIVE")
+            self.assertEqual(result["failed"], 0)
+            self.assertIn("missing_content", result["issues"][0])
