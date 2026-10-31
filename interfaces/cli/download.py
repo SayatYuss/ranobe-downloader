@@ -6,6 +6,7 @@ import httpx
 
 from core.auth.storage import KeyringTokenStorage
 from core.book_downloader import BookDownloader
+from interfaces.cli.translation_selector import select_translation
 from providers.libsocial.client import LibSocialClient
 
 
