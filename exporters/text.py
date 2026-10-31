@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from base64 import b64encode
+from exporters.atomic import atomic_destination
 from html import escape
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -49,8 +50,8 @@ class TxtExporter:
             pieces.append(description)
         pieces.extend(_text(chapter) for chapter in chapters)
         target = Path(destination)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("\n\n".join(part for part in pieces if part) + "\n", encoding="utf-8")
+        with atomic_destination(target) as temporary:
+            temporary.write_text("\n\n".join(part for part in pieces if part) + "\n", encoding="utf-8")
         return target
 
 
@@ -87,6 +88,6 @@ class HtmlExporter:
                     '<title>' + escape(title) + '</title></head><body><main>'
                     '<h1>' + escape(title) + '</h1>' + "".join(sections) + '</main></body></html>')
         target = Path(destination)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(document, encoding="utf-8")
+        with atomic_destination(target) as temporary:
+            temporary.write_text(document, encoding="utf-8")
         return target
