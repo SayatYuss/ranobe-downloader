@@ -7,6 +7,10 @@ from pathlib import Path
 
 from core.auth.storage import KeyringTokenStorage
 from core.compatibility_audit import audit_title
+from core.download.plan import make_translations
+from core.download.retry import with_retries
+from providers.libsocial.titles import TitleProvider
+from providers.libsocial.chapters import ChapterProvider
 from providers.libsocial.client import LibSocialClient
 
 
@@ -19,7 +23,9 @@ def configure_parser(parser):
     parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N chapters (default: 10)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI status colors")
     parser.add_argument("--sample", type=int, default=10, help="Chapters sampled per title")
-    parser.add_argument("--branch", type=int, help="Specific translation branch")
+    branch_group = parser.add_mutually_exclusive_group()
+    branch_group.add_argument("--branch", type=int, help="Specific translation branch")
+    branch_group.add_argument("--all-branches", action="store_true", help="Audit every translation separately")
     parser.add_argument("--metadata-only", action="store_true",
                         help="Inspect metadata and chapter index without fetching chapter text")
     parser.add_argument("--json", type=Path, metavar="PATH", help="Write JSON report")
@@ -56,61 +62,86 @@ def execute(args):
     use_color = sys.stdout.isatty() and not args.no_color and not bool(__import__('os').environ.get('NO_COLOR'))
     with LibSocialClient(KeyringTokenStorage().load()) as client:
         for reference in args.references:
-            previous = next((r for r in saved_reports
-                             if r.get("reference") == reference), None)
-
-            active = None
-
-            def on_progress(state, current, total):
-                nonlocal active
-                active = state
-                state["reference"] = reference
-                if not any(r is state for r in reports):
-                    reports.append(state)
-                elapsed = state["elapsed_seconds"]
-                remaining = total - current
-                eta = (elapsed / current * remaining) if current else 0
-                print(f"[{current}/{total}] {current / total:.1%} "
-                      f"passed={state['passed']} failed={state['failed']} "
-                      f"unverified={state['unverified']} "
-                      f"elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m", flush=True)
-                if current % args.save_every == 0 or current == total:
+            prepared = None
+            if args.all_branches:
+                try:
+                    title = with_retries(
+                        lambda: TitleProvider(client).get_title(reference),
+                        attempts=args.retries)
+                    chapters = with_retries(
+                        lambda: ChapterProvider(client).get_chapters(title.slug_url),
+                        attempts=args.retries)
+                    branches = [t.branch_id for t in make_translations(tuple(chapters))]
+                    if not branches:
+                        branches = [None]
+                    prepared = (title, chapters)
+                except Exception as exc:
+                    error_report = {"reference": reference, "selected_branch": None,
+                                    "status": "ERROR", "issues": [f"{type(exc).__name__}: {exc}"]}
+                    reports.append(error_report)
                     save_reports()
+                    print(f"{reference}: ERROR - {error_report['issues'][0]}")
+                    continue
+            else:
+                branches = [args.branch]
 
-            try:
-                report = audit_title(
-                    client, reference, sample=args.sample, branch_id=args.branch,
-                    metadata_only=args.metadata_only, retries=args.retries,
-                    mode='metadata' if args.metadata_only else args.mode,
-                    delay=args.delay, progress=on_progress,
-                    resume_state=previous if args.resume else None,
-                    check_images=args.check_images,
-                )
-            except Exception as exc:
-                if active is not None:
-                    active["status"] = "ERROR"
-                    active["issues"].append(f"Audit interrupted: {type(exc).__name__}: {exc}")
-                    report = active
-                else:
-                    report = {"reference": reference, "status": "ERROR", "issues": [
-                        f"{type(exc).__name__}: {exc}"]}
-            report["reference"] = reference
-            if not any(r is report for r in reports):
-                reports.append(report)
-            save_reports()
-            label = report["status"]
-            if use_color:
-                label = colors.get(label, "") + label + "\x1b[0m"
-            print(f"{report.get('title', reference)}: {label}")
-            if "chapters_total" in report:
-                print(f"  Chapters: {report['chapters_total']}, sampled: {report['sampled']}, "
-                      f"passed: {report['passed']}, failed: {report['failed']}, "
-                      f"unverified: {report.get('unverified', 0)}")
-                print(f"  Branches: {report['available_branches']}")
-                print(f"  Nodes: {report['node_types']}")
-                print(f"  Formats: {report.get('content_formats', {})}, HTML images: {report.get('html_images', 0)}")
-            for issue in report["issues"]:
-                print(f"  - {issue}")
+            print(f"{reference}: checking {len(branches)} translation(s)", flush=True)
+            for branch_id in branches:
+                previous = next(
+                    (r for r in saved_reports
+                     if r.get("reference") == reference and r.get("selected_branch") == branch_id),
+                    None)
+                active = None
+                branch_label = f"branch {branch_id}" if branch_id is not None else "unbranched"
+
+                def on_progress(state, current, total):
+                    nonlocal active
+                    active = state
+                    state["reference"] = reference
+                    if not any(r is state for r in reports):
+                        reports.append(state)
+                    elapsed = state["elapsed_seconds"]
+                    eta = elapsed / current * (total - current) if current else 0
+                    print(f"{branch_label} [{current}/{total}] {current / total:.1%} "
+                          f"passed={state['passed']} failed={state['failed']} "
+                          f"unverified={state['unverified']} "
+                          f"elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m", flush=True)
+                    if current % args.save_every == 0 or current == total:
+                        save_reports()
+
+                try:
+                    report = audit_title(
+                        client, reference, sample=args.sample, branch_id=branch_id,
+                        metadata_only=args.metadata_only, retries=args.retries,
+                        mode='metadata' if args.metadata_only else args.mode,
+                        delay=args.delay, progress=on_progress,
+                        resume_state=previous if args.resume else None,
+                        check_images=args.check_images, prepared=prepared)
+                except Exception as exc:
+                    if active is not None:
+                        active["status"] = "ERROR"
+                        active["issues"].append(f"Audit interrupted: {type(exc).__name__}: {exc}")
+                        report = active
+                    else:
+                        report = {"reference": reference, "selected_branch": branch_id,
+                                  "status": "ERROR", "issues": [f"{type(exc).__name__}: {exc}"]}
+                report["reference"] = reference
+                if not any(r is report for r in reports):
+                    reports.append(report)
+                save_reports()
+                label = report["status"]
+                if use_color:
+                    label = colors.get(label, "") + label + "\x1b[0m"
+                print(f"{report.get('title', reference)} ({branch_label}): {label}")
+                if "chapters_total" in report:
+                    print(f"  Chapters: {report['chapters_total']}, sampled: {report['sampled']}, "
+                          f"passed: {report['passed']}, failed: {report['failed']}, "
+                          f"unverified: {report.get('unverified', 0)}")
+                    print(f"  Branches: {report['available_branches']}")
+                    print(f"  Nodes: {report['node_types']}")
+                    print(f"  Formats: {report.get('content_formats', {})}, HTML images: {report.get('html_images', 0)}")
+                for issue in report["issues"]:
+                    print(f"  - {issue}")
     if args.json:
         save_reports()
         print(f"Report saved: {args.json}")
