@@ -14,6 +14,7 @@ def configure_parser(parser):
     parser.add_argument("references", nargs="+", help="Title IDs, slugs, or URLs")
     parser.add_argument("--mode", choices=("metadata", "sample", "full"), default="sample",
                         help="metadata=index only, sample=selected chapters, full=all selected chapters")
+    parser.add_argument("--check-images", action="store_true", help="Download and validate referenced images (slower)")
     parser.add_argument("--resume", action="store_true", help="Resume from existing --json report")
     parser.add_argument("--save-every", type=int, default=10, help="Save checkpoint every N chapters (default: 10)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI status colors")
@@ -58,12 +59,17 @@ def execute(args):
             previous = next((r for r in saved_reports
                              if r.get("reference") == reference), None)
 
+            active = None
+
             def on_progress(state, current, total):
+                nonlocal active
+                active = state
                 state["reference"] = reference
                 if not any(r is state for r in reports):
                     reports.append(state)
                 elapsed = state["elapsed_seconds"]
-                eta = elapsed / current * (total - current) if current else 0
+                remaining = total - current
+                eta = (elapsed / current * remaining) if current else 0
                 print(f"[{current}/{total}] {current / total:.1%} "
                       f"passed={state['passed']} failed={state['failed']} "
                       f"unverified={state['unverified']} "
@@ -78,10 +84,16 @@ def execute(args):
                     mode='metadata' if args.metadata_only else args.mode,
                     delay=args.delay, progress=on_progress,
                     resume_state=previous if args.resume else None,
+                    check_images=args.check_images,
                 )
             except Exception as exc:
-                report = {"reference": reference, "status": "ERROR", "issues": [
-                    f"{type(exc).__name__}: {exc}"]}
+                if active is not None:
+                    active["status"] = "ERROR"
+                    active["issues"].append(f"Audit interrupted: {type(exc).__name__}: {exc}")
+                    report = active
+                else:
+                    report = {"reference": reference, "status": "ERROR", "issues": [
+                        f"{type(exc).__name__}: {exc}"]}
             report["reference"] = reference
             if not any(r is report for r in reports):
                 reports.append(report)
@@ -96,6 +108,7 @@ def execute(args):
                       f"unverified: {report.get('unverified', 0)}")
                 print(f"  Branches: {report['available_branches']}")
                 print(f"  Nodes: {report['node_types']}")
+                print(f"  Formats: {report.get('content_formats', {})}, HTML images: {report.get('html_images', 0)}")
             for issue in report["issues"]:
                 print(f"  - {issue}")
     if args.json:
