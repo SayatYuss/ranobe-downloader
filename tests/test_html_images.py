@@ -33,11 +33,21 @@ class HtmlImagesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Untrusted"):
             resolve_html_images('<img src="https://evil.example/a.jpg">', self.attachments)
 
-    def test_missing_attachment_fails(self):
+    def test_missing_attachment_uses_safe_fallback(self):
+        path = "/uploads/ranobe/14841/chapters/123/missing.jpg"
+        attachments = list(self.attachments)
+        sources, ids = resolve_html_images(
+            '<img src="' + path + '">', attachments,
+        )
+        self.assertEqual(len(ids), 1)
+        self.assertEqual(sources[path], ids[0])
+        self.assertEqual(attachments[-1]["originalUrl"], path)
+
+    def test_unsupported_image_path_without_attachment_fails(self):
         with self.assertRaisesRegex(ValueError, "missing"):
             resolve_html_images(
-                '<img src="/uploads/ranobe/14841/chapters/123/missing.jpg">',
-                self.attachments,
+                '<img src="/uploads/ranobe/14841/other/missing.jpg">',
+                list(self.attachments),
             )
 
     def test_duplicate_image_is_embedded_once(self):
