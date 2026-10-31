@@ -156,3 +156,7 @@ ranobe audit '14841--beginning-after-the-end-novel' --branch 9824 --mode full --
 ### Проверка всех переводов
 
 `ranobe audit '14841--beginning-after-the-end-novel' --all-branches --mode sample --sample 30 --json output/audit-all-branches.json` проверяет каждый найденный перевод отдельно. Метаданные и индекс загружаются один раз; в JSON каждый перевод хранится отдельным элементом с `selected_branch`. Можно добавить `--check-images`, `--resume` и `--mode full`. Флаги `--branch` и `--all-branches` взаимоисключающие.
+
+### Отчёты аудита
+
+По умолчанию результаты автоматически сохраняются отдельно для каждого перевода в папку `output/audit/` с именем `<slug_url>_<branch_id>.json` (или `_default.json` для книг без перевода). Путь можно изменить через `--output-dir DIR`. Пример: `ranobe audit '14841--beginning-after-the-end-novel' --all-branches --sample 30`. `--resume` автоматически читает эти файлы. Необязательный `--json PATH` по-прежнему создаёт дополнительный объединённый JSON для совместимости со старыми сценариями.
