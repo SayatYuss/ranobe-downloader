@@ -72,6 +72,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(received[0].cached_chapters, 0)
         self.assertEqual(received[0].epub_bytes, 0)
 
+    def test_fractional_range_only_downloads_selected_chapters(self):
+        items = [chapter(46, [10]), chapter(14, [10]), chapter(13, [20]),
+                 chapter(45, [10]), chapter(1, [10])]
+        fractional = chapter(13, [10])
+        fractional.number = "13.4"
+        items.append(fractional)
+        self.downloader.chapters.get_chapters = Mock(return_value=items)
+        self.downloader.download(
+            "7", "book.epub", branch_id=10,
+            chapter_from="13.4", chapter_to="45",
+            delay=0, cache_dir=self.temp.name,
+        )
+        sent = [call.kwargs["number"] for call in self.downloader.contents.get_chapter.call_args_list]
+        self.assertEqual(sent, ["13.4", "14", "45"])
+        self.assertEqual(len(self.exporter.export.call_args.kwargs["chapters"]), 3)
+
+    def test_range_failure_before_content_request(self):
+        self.downloader.chapters.get_chapters = Mock(return_value=[chapter(1, [10])])
+        with self.assertRaisesRegex(ValueError, "not available"):
+            self.downloader.download("7", "book.epub", branch_id=10,
+                                     chapter_from="99", cache_dir=self.temp.name)
+        self.downloader.contents.get_chapter.assert_not_called()
+
     def test_no_statistics_on_failure(self):
         self.downloader.chapters.get_chapters = Mock(return_value=[chapter(2, [10])])
         self.downloader.contents.get_chapter = Mock(side_effect=ValueError('failure'))
