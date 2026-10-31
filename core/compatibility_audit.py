@@ -104,7 +104,7 @@ def audit_title(client, reference: str, *, sample: int = 10,
             images = {}
             if isinstance(content.content, dict):
                 _inspect(content.content, types, marks)
-                attachments = {a.get("name"): a for a in content.data.get("attachments", [])
+                attachments = {a.get("name"): a for a in getattr(content, "data", {}).get("attachments", [])
                                if isinstance(a, dict)}
                 for uid in image_refs(content.content):
                     attached = attachments.get(uid)
