@@ -45,7 +45,7 @@ def execute(args):
         raise SystemExit("--save-every must be positive")
     reports = []
     saved_reports = []
-    if args.resume and args.json.is_file():
+    if args.resume and args.json is not None and args.json.is_file():
         saved_reports = json.loads(args.json.read_text(encoding="utf-8"))
         if not isinstance(saved_reports, list):
             raise SystemExit("Invalid audit report format")
