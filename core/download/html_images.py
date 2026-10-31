@@ -70,7 +70,7 @@ def resolve_html_images(html: str, attachments) -> tuple[dict[str, str], list[st
         uid = lookup.get(path)
         if uid is None:
             match = re.fullmatch(
-                r"/uploads/ranobe/\\d+/chapters/\\d+/([0-9a-fA-F-]{36})\\.([A-Za-z]+)",
+                r"/uploads/ranobe/\d+/chapters/\d+/([0-9a-fA-F-]{36})\.([A-Za-z]+)",
                 path,
             )
             if match is None or match.group(2).lower() not in FORMATS:
