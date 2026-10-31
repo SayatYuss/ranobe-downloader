@@ -9,6 +9,7 @@ from core.download.fetcher import ChapterFetcher
 from core.download.processor import ContentProcessor
 from core.download.statistics import DownloadStatistics
 from core.download.plan import DownloadPlan, make_translations
+from core.download.range import select_chapter_range
 from pathlib import Path
 from typing import Callable
 
@@ -69,6 +70,8 @@ class BookDownloader:
 
     def download(self, reference: str | DownloadPlan, output: str | Path, *,
                  branch_id: int | None = None, limit: int | None = None,
+                 chapter_from: str | int | None = None,
+                 chapter_to: str | int | None = None,
                  progress: Callable[[int, int, str], None] | None = None,
                  resume: bool = False, cache_dir: str | Path = 'output/.cache',
                  delay: float = 1.0, retries: int = 5,
@@ -97,6 +100,7 @@ class BookDownloader:
         selected = [chapter for chapter in chapter_list
                     if branch_id is None or any(b.branch_id == branch_id for b in chapter.branches)]
         selected.sort(key=_chapter_order)
+        selected = select_chapter_range(selected, chapter_from, chapter_to)
         if limit is not None:
             selected = selected[:limit]
         if not selected:

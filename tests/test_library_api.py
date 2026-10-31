@@ -37,6 +37,28 @@ class LibraryApiTests(unittest.TestCase):
             self.assertEqual(self.backend.download.call_args.args[0], self.plan)
             self.assertIs(self.backend.exporter, original)
 
+    def test_chapter_listing_and_range_forwarding(self):
+        chapters = (
+            SimpleNamespace(volume="1", number="45", name="Last",
+                            branches=(SimpleNamespace(branch_id=7),), index=2),
+            SimpleNamespace(volume="1", number="13.4", name="First",
+                            branches=(SimpleNamespace(branch_id=7),), index=1),
+            SimpleNamespace(volume="1", number="2", name="Other",
+                            branches=(SimpleNamespace(branch_id=8),), index=0),
+        )
+        self.backend.prepare.return_value = DownloadPlan(
+            title=self.plan.title, chapters=chapters, translations=self.plan.translations,
+        )
+        with Downloader(backend=self.backend) as api:
+            book = api.get_book("42--demo")
+            self.assertEqual(
+                [ch["number"] for ch in book.list_chapters(branch_id=7)],
+                ["13.4", "45"],
+            )
+            api.download(book, format="txt", chapter_from="13.4", chapter_to="45")
+            self.assertEqual(self.backend.download.call_args.kwargs["chapter_from"], "13.4")
+            self.assertEqual(self.backend.download.call_args.kwargs["chapter_to"], "45")
+
     def test_exporter_restored_on_failure(self):
         self.backend.download.side_effect = ValueError("test")
         with Downloader(backend=self.backend) as api:
