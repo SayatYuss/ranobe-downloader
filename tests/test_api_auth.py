@@ -63,7 +63,10 @@ class ApiAuthTests(unittest.TestCase):
             "interfaces.cli.audit.TitleProvider"
         ) as title, patch("interfaces.cli.audit.ChapterProvider") as chapters, patch(
             "interfaces.cli.audit.audit_title"
-        ) as audit, patch("interfaces.cli.audit.Path.is_file", return_value=False):
+        ) as audit, patch(
+            "interfaces.cli.audit.KeyringTokenStorage"
+        ) as storage, patch("interfaces.cli.audit.Path.is_file", return_value=False):
+            storage.return_value.load.return_value = None
             title.return_value.get_title.return_value = MagicMock(
                 slug_url="271947--test", title="Test")
             chapters.return_value.get_chapters.return_value = []
