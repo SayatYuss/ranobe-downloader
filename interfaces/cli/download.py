@@ -22,12 +22,14 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
 def execute(args: argparse.Namespace) -> None:
     try:
+        print('Connecting to RanobeLib...', flush=True)
         with LibSocialClient(KeyringTokenStorage().load()) as client:
             def report(current, total, chapter):
-                print(f'[{current}/{total}] {chapter}')
+                print(f'[{current}/{total}] {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
             downloader = BookDownloader(client)
             title = downloader.titles.get_title(args.reference)
+            print(f'Title: {title.title}', flush=True)
             target = args.output or Path('output') / f'{title.id}.epub'
             # Keep a single fetched title available for the workflow.
             downloader.titles.get_title = lambda reference: title
@@ -35,7 +37,8 @@ def execute(args: argparse.Namespace) -> None:
                                          branch_id=args.branch, limit=args.limit,
                                          progress=report, resume=args.resume,
                                          cache_dir=args.cache_dir, delay=args.delay,
-                                         retries=args.retries)
+                                         retries=args.retries,
+                                         status=lambda message: print(message, flush=True))
         print(f'Saved: {result}')
     except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as exc:
         raise SystemExit(f'Download failed: {exc}') from exc
