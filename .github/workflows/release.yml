@@ -15,10 +15,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install build and verification tools
@@ -60,7 +60,7 @@ jobs:
           /tmp/ranobe-wheel-test/bin/python -m pip install dist/*.whl
           /tmp/ranobe-wheel-test/bin/ranobe --version
           /tmp/ranobe-wheel-test/bin/ranobe download --help
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Build Web UI distribution
