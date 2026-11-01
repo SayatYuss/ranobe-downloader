@@ -36,7 +36,7 @@
 - Исправлена установка дополнительных зависимостей в GitHub Actions Release.
 - Восстановлен запуск полного набора тестов при сборке релиза.
 
-[0.3.1]: https://github.com/SayatYuss/donwloader-private/releases/tag/v0.3.1
+[0.3.1]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.3.1
 
 ## [0.3.0] — 2026-11-01
 
@@ -119,7 +119,7 @@
 - Telegram ограничивает размер отправляемого файла.
 - Python Library и интерфейсы продолжают развиваться; полная обратная совместимость пока не гарантируется.
 
-[0.3.0]: https://github.com/SayatYuss/donwloader-private/releases/tag/v0.3.0
+[0.3.0]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.3.0
 
 
 ### Добавлено
@@ -158,6 +158,6 @@
 - Недоступные платные главы пропускаются, и итоговый файл может быть неполным.
 - API библиотеки и CLI ещё не объявлены стабильными.
 
-[0.2.0a1]: https://github.com/SayatYuss/donwloader-private/releases/tag/v0.2.0a1
+[0.2.0a1]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.2.0a1
 
-[0.4.0]: https://github.com/SayatYuss/donwloader-private/releases/tag/v0.4.0
+[0.4.0]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.4.0

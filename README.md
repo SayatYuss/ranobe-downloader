@@ -19,7 +19,7 @@
 
 ## Быстрый старт: приложение для ПК
 
-В [Releases](https://github.com/SayatYuss/donwloader-private/releases) скачайте файл для своей ОС:
+В [Releases](https://github.com/SayatYuss/ranobe-downloader/releases) скачайте файл для своей ОС:
 
 | ОС | Файл |
 | --- | --- |
@@ -39,8 +39,8 @@ Python и Node.js для готовых сборок не нужны. [Запу�
 ## Быстрый старт: CLI
 
 ```bash
-git clone https://github.com/SayatYuss/donwloader-private.git
-cd donwloader-private
+git clone https://github.com/SayatYuss/ranobe-downloader.git
+cd ranobe-downloader
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
