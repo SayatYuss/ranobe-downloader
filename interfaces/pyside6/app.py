@@ -6,6 +6,7 @@ import logging
 import shutil
 import sys
 from collections import deque
+from threading import Event
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Qt, Signal, QUrl
@@ -14,7 +15,7 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QSystemTrayIcon, QTabWidget, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget, QMenu,
+    QTableWidgetItem, QVBoxLayout, QWidget, QMenu, QAbstractItemView,
 )
 
 from core.auth.storage import KeyringTokenStorage
@@ -22,6 +23,7 @@ from providers.libsocial.client import LibSocialClient
 from providers.libsocial.cover import download_cover
 from ranobe_downloader import Downloader
 from interfaces.pyside6.storage import Store, configure_logging
+from interfaces.pyside6.theme import apply_theme
 
 log = logging.getLogger(__name__)
 GITHUB = "https://github.com/SayatYuss"
@@ -35,6 +37,7 @@ class Task(QObject):
     def __init__(self, operation, *args):
         super().__init__()
         self.operation, self.args = operation, args
+        self.cancel = Event()
 
     def run(self):
         try:
@@ -63,13 +66,18 @@ def verify_token(task, token):
     return user["username"]
 
 
+class DownloadCancelled(Exception):
+    def __str__(self):
+        return "CANCELLED: download interrupted"
+
+
 def perform_download(task, book, branch, fmt, start_id, end_id, path, cache, token):
     with Downloader(token=token) as downloader:
         return downloader.download(
             book, branch_id=branch, format=fmt, output=path,
             chapter_start_id=start_id, chapter_end_id=end_id,
             cache_dir=cache, resume=True,
-            progress=lambda a, b, name: task.progress.emit(a, b, name),
+            progress=lambda a, b, name: (task.cancel.is_set() and (_ for _ in ()).throw(DownloadCancelled())) or task.progress.emit(a, b, name),
         )
 
 
@@ -83,16 +91,22 @@ class Window(QMainWindow):
         self.chapters = ()
         self.translation_ids = []
         self.pending = deque()
+        self.current = None
+        self.current_task = None
+        self.active_paths = set()
+        self.history_indices = []
         self.running = False
         self.threads = []
         self.tasks = []
         self.exiting = False
         self.setWindowTitle("Ranobe Downloader")
-        self.resize(790, 560)
+        self.resize(870, 600)
         self.setAcceptDrops(True)
 
         wrapper = QWidget()
         main = QVBoxLayout(wrapper)
+        main.setContentsMargins(24, 20, 24, 18)
+        main.setSpacing(16)
         header = QHBoxLayout()
         header.addWidget(QLabel("<b>Ranobe Downloader</b>"))
         header.addStretch()
@@ -105,6 +119,9 @@ class Window(QMainWindow):
 
         download = QWidget()
         form = QFormLayout(download)
+        form.setContentsMargins(12, 18, 12, 12)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(12)
         ref_line = QHBoxLayout()
         self.reference = QLineEdit()
         self.reference.setPlaceholderText("Ссылка на RanobeLib")
@@ -148,13 +165,30 @@ class Window(QMainWindow):
 
         queue_page = QWidget()
         queue_layout = QVBoxLayout(queue_page)
-        self.queue_list = QPlainTextEdit()
-        self.queue_list.setReadOnly(True)
-        queue_layout.addWidget(self.queue_list)
+        self.queue_table = QTableWidget(0, 3)
+        self.queue_table.setHorizontalHeaderLabels(["Книга", "Формат", "Состояние"])
+        self.queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.queue_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.queue_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.queue_table.horizontalHeader().setStretchLastSection(True)
+        queue_layout.addWidget(self.queue_table)
+        queue_controls = QHBoxLayout()
+        self.cancel_button = QPushButton("Отменить текущую")
+        self.cancel_button.clicked.connect(self.cancel_current)
+        remove_queue_button = QPushButton("Удалить из очереди")
+        remove_queue_button.clicked.connect(self.remove_pending)
+        queue_controls.addWidget(self.cancel_button)
+        queue_controls.addWidget(remove_queue_button)
+        queue_controls.addStretch()
+        queue_layout.addLayout(queue_controls)
         self.tabs.addTab(queue_page, "Очередь")
 
         history_page = QWidget()
         history_layout = QVBoxLayout(history_page)
+        self.history_filter = QLineEdit()
+        self.history_filter.setPlaceholderText("Поиск по истории")
+        self.history_filter.textChanged.connect(self.reload_history)
+        history_layout.addWidget(self.history_filter)
         self.history = QTableWidget(0, 4)
         self.history.setHorizontalHeaderLabels(["Название", "Формат", "Дата", "Размер"])
         self.history.horizontalHeader().setStretchLastSection(True)
@@ -164,7 +198,19 @@ class Window(QMainWindow):
         history_layout.addWidget(self.history)
         open_btn = QPushButton("Открыть файл")
         open_btn.clicked.connect(self.open_selected_history)
-        history_layout.addWidget(open_btn)
+        controls = QHBoxLayout()
+        controls.addWidget(open_btn)
+        folder_btn = QPushButton("Открыть папку")
+        folder_btn.clicked.connect(self.open_history_folder)
+        controls.addWidget(folder_btn)
+        delete_btn = QPushButton("Удалить запись")
+        delete_btn.clicked.connect(self.delete_history_record)
+        controls.addWidget(delete_btn)
+        repeat_btn = QPushButton("Повторить")
+        repeat_btn.clicked.connect(self.redownload_history)
+        controls.addWidget(repeat_btn)
+        controls.addStretch()
+        history_layout.addLayout(controls)
         self.tabs.addTab(history_page, "История")
 
         settings_page = QWidget()
@@ -177,6 +223,11 @@ class Window(QMainWindow):
         directory_row.addWidget(browse)
         settings_form.addRow("Папка загрузок", directory_row)
         self.directory.editingFinished.connect(self.save_dir)
+        self.theme_box = QComboBox()
+        self.theme_box.addItems(["Системная", "Светлая", "Тёмная"])
+        self.theme_box.setCurrentIndex({"system": 0, "light": 1, "dark": 2}.get(self.store.settings.get("theme", "system"), 0))
+        self.theme_box.currentIndexChanged.connect(self.change_theme)
+        settings_form.addRow("Тема", self.theme_box)
         settings_form.addRow("Кеш", QLabel(str(self.store.cache)))
         clear = QPushButton("Очистить кеш")
         clear.clicked.connect(self.clear_cache)
@@ -233,6 +284,8 @@ class Window(QMainWindow):
         thread.finished.connect(thread.deleteLater)
         thread.finished.connect(lambda: self.tasks.remove(task) if task in self.tasks else None)
         self.threads.append(thread)
+        if operation == perform_download:
+            self.current_task = task
         self.tasks.append(task)
         thread.finished.connect(lambda: self.threads.remove(thread) if thread in self.threads else None)
         if operation == perform_download:
@@ -241,6 +294,8 @@ class Window(QMainWindow):
 
     def report_error(self, message):
         self.running = False
+        self.current_task = None
+        self.current = None
         self.status.setText("Ошибка: " + message)
         QMessageBox.warning(self, "Ошибка", message)
         self.run_next()
@@ -314,7 +369,7 @@ class Window(QMainWindow):
         base = directory / f"{self.book.slug_url}_{branch if branch is not None else 'default'}.{fmt}"
         path = base
         number = 1
-        while path.exists() or any(item[5] == path for item in self.pending):
+        while path.exists() or path in self.active_paths or any(item[5] == path for item in self.pending):
             path = base.with_name(f"{base.stem}_{number}{base.suffix}")
             number += 1
         self.pending.append((self.book, branch, fmt, start, end, path))
@@ -322,34 +377,73 @@ class Window(QMainWindow):
         self.run_next()
 
     def update_queue(self):
-        self.queue_list.setPlainText("\n".join(f"{book.title} · {fmt} → {path.name}" for book, _, fmt, _, _, path in self.pending) or "Очередь пуста")
+        rows = ([self.current] if self.current else []) + list(self.pending)
+        self.queue_table.setRowCount(len(rows))
+        for row, entry in enumerate(rows):
+            book, branch, fmt, start, end, path = entry
+            for col, value in enumerate((book.title, fmt.upper(), "Скачивается" if row == 0 and self.current else "Ожидает")):
+                self.queue_table.setItem(row, col, QTableWidgetItem(value))
+        self.cancel_button.setEnabled(self.current_task is not None)
+
+    def remove_pending(self):
+        selected = self.queue_table.currentRow()
+        index = selected - (1 if self.current else 0)
+        if index < 0 or index >= len(self.pending):
+            return
+        del self.pending[index]
+        self.update_queue()
+
+    def cancel_current(self):
+        if self.current_task:
+            self.current_task.cancel.set()
+            self.status.setText("Отмена после текущей главы…")
 
     def run_next(self):
         if self.running or not self.pending:
+            self.update_queue()
             return
         book, branch, fmt, start, end, path = self.pending.popleft()
-        self.update_queue()
+        self.current = (book, branch, fmt, start, end, path)
+        self.active_paths.add(path)
         self.running = True
         self.progress.setValue(0)
         self.status.setText(f"Скачивание: {book.title}")
+        self.update_queue()
         def completed(saved):
             self.running = False
+            self.current_task = None
+            self.current = None
+            self.active_paths.discard(path)
             self.store.add_download(title=book.title, path=Path(saved), fmt=fmt)
             self.reload_history()
             self.status.setText(f"Сохранено: {saved}")
             if self.tray.isVisible():
                 self.tray.showMessage("Ranobe Downloader", f"Загрузка завершена: {book.title}")
             self.run_next()
+        def failed(message):
+            self.running = False
+            self.current_task = None
+            self.current = None
+            self.active_paths.discard(path)
+            if message.startswith("CANCELLED:"):
+                self.status.setText("Отменено")
+            else:
+                self.status.setText("Ошибка загрузки")
+                QMessageBox.warning(self, "Ошибка", message)
+            self.run_next()
         self.run_task(perform_download, book, branch, fmt, start, end, path, self.store.cache,
-                      self.token_store.load(), on_done=completed)
+                      self.token_store.load(), on_done=completed, on_failure=failed)
 
     def on_progress(self, current, total, chapter):
         self.progress.setValue(round(current * 100 / total) if total else 0)
         self.status.setText(f"{current}/{total} — {chapter}")
 
     def reload_history(self):
-        self.history.setRowCount(len(self.store.history))
-        for row, record in enumerate(self.store.history):
+        query = self.history_filter.text().strip().casefold()
+        self.history_indices = [i for i, item in enumerate(self.store.history) if query in item.get("title", "").casefold() or query in item.get("format", "").casefold()]
+        self.history.setRowCount(len(self.history_indices))
+        for row, index in enumerate(self.history_indices):
+            record = self.store.history[index]
             for col, key in enumerate(("title", "format", "date", "size")):
                 value = record.get(key, "")
                 if key == "size":
@@ -372,6 +466,35 @@ class Window(QMainWindow):
         row = self.history.currentRow()
         if row >= 0:
             self.open_history(row, 0)
+
+    def selected_history_index(self):
+        row = self.history.currentRow()
+        return self.history_indices[row] if 0 <= row < len(self.history_indices) else None
+
+    def open_history_folder(self):
+        index = self.selected_history_index()
+        if index is not None:
+            path = Path(self.store.history[index]["path"]).parent
+            if path.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def delete_history_record(self):
+        index = self.selected_history_index()
+        if index is not None:
+            del self.store.history[index]
+            self.store.save_history()
+            self.reload_history()
+
+    def redownload_history(self):
+        index = self.selected_history_index()
+        if index is not None:
+            QMessageBox.information(self, "Повторить", "Вставьте ссылку на произведение во вкладке «Скачать». История пока не содержит исходную ссылку.")
+
+    def change_theme(self):
+        mode = ("system", "light", "dark")[self.theme_box.currentIndex()]
+        self.store.settings["theme"] = mode
+        self.store.save_settings()
+        apply_theme(QApplication.instance(), mode)
 
     def choose_dir(self):
         path = QFileDialog.getExistingDirectory(self, "Папка загрузок", self.directory.text())
@@ -451,6 +574,7 @@ def main():
     app.setApplicationName("RanobeDownloader")
     app.setQuitOnLastWindowClosed(not QSystemTrayIcon.isSystemTrayAvailable())
     window = Window()
+    apply_theme(app, window.store.settings.get("theme", "system"))
     window.show()
     return app.exec()
 
