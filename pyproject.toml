@@ -4,10 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ranobe-downloader"
-version = "0.4.0"
+version = "0.4.1"
 description = "RanobeLib downloader with PySide6 desktop, CLI, Python API, Web UI, HTTP API and Telegram bot"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["ranobe", "ranobelib", "epub", "downloader"]
 dependencies = [
   "httpx>=0.27,<1",
   "keyring>=25,<27",
@@ -24,6 +27,13 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
+
+[project.urls]
+Homepage = "https://github.com/SayatYuss/ranobe-downloader"
+Repository = "https://github.com/SayatYuss/ranobe-downloader"
+Documentation = "https://github.com/SayatYuss/ranobe-downloader/blob/main/docs/README.md"
+Issues = "https://github.com/SayatYuss/ranobe-downloader/issues"
+Changelog = "https://github.com/SayatYuss/ranobe-downloader/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 images = ["Pillow>=10,<13"]
