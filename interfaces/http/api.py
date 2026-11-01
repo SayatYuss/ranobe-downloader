@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import os
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 from typing import Callable
 from uuid import uuid4
 
@@ -42,18 +43,21 @@ class Job:
     filename: str | None = None
     error: str | None = None
     path: Path | None = field(default=None, repr=False)
+    cancel: Event = field(default_factory=Event, repr=False)
+    updated: float = field(default_factory=time.time)
+    queue_position: int | None = None
 
     def public(self) -> dict:
-        data = asdict(self)
-        data.pop("path")
+        data = {k: v for k, v in vars(self).items() if k not in ("path", "cancel")}
         return data
 
 
 def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
                output_dir: str | Path = "output/api",
-               max_workers: int = 2, max_jobs: int = 50) -> FastAPI:
+               max_workers: int = 2, max_jobs: int = 50,
+               max_queue: int = 20, retention_seconds: int = 3600) -> FastAPI:
     """Create an in-process job server. Jobs are not persisted across restarts."""
-    if max_workers < 1 or max_jobs < 1:
+    if max_workers < 1 or max_jobs < 1 or max_queue < 0 or retention_seconds < 1:
         raise ValueError("max_workers and max_jobs must be positive")
     executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="ranobe-api")
 
