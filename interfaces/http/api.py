@@ -72,8 +72,36 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
     base = Path(output_dir).resolve()
     jobs: dict[str, Job] = {}
     lock = Lock()
+    futures: dict[str, Future] = {}
+    queue: list[str] = []
+
+    def refresh_queue():
+        queue[:] = [jid for jid in queue if jid in jobs and jobs[jid].state == "queued"]
+        for index, jid in enumerate(queue, 1):
+            jobs[jid].queue_position = index
+
+    def cleanup_expired():
+        now = time.time()
+        paths = []
+        with lock:
+            for jid, job in list(jobs.items()):
+                if job.state in ("completed", "failed", "cancelled") and now - job.updated >= retention_seconds:
+                    paths.append(base / f"{jid}.{job.format}")
+                    jobs.pop(jid)
+                    futures.pop(jid, None)
+            refresh_queue()
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+    def finish(job, state, error=None):
+        job.state = state
+        job.error = error
+        job.updated = time.time()
+        job.queue_position = None
+
 
     def snapshot(job_id: str) -> dict:
+        cleanup_expired()
         with lock:
             job = jobs.get(job_id)
             if job is None:
