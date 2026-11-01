@@ -294,12 +294,8 @@ class Window(QMainWindow):
         thread.start()
 
     def report_error(self, message):
-        self.running = False
-        self.current_task = None
-        self.current = None
         self.status.setText("Ошибка: " + message)
         QMessageBox.warning(self, "Ошибка", message)
-        self.run_next()
 
     def find_book(self):
         reference = self.reference.text().strip()
@@ -541,8 +537,8 @@ class Window(QMainWindow):
         self.store.save_settings()
 
     def clear_cache(self):
-        if self.running:
-            QMessageBox.information(self, "Кеш", "Дождитесь завершения загрузки")
+        if self.running or self.pending:
+            QMessageBox.information(self, "Кеш", "Дождитесь завершения загрузок")
             return
         shutil.rmtree(self.store.cache, ignore_errors=True)
         self.store.cache.mkdir(exist_ok=True)
