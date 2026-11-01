@@ -95,6 +95,7 @@ class Window(QMainWindow):
         self.current_task = None
         self.active_paths = set()
         self.history_indices = []
+        self.repeat_record = None
         self.running = False
         self.threads = []
         self.tasks = []
@@ -326,6 +327,31 @@ class Window(QMainWindow):
         self.translation.blockSignals(False)
         self.translation_changed()
         self.status.setText("Готово")
+        if self.repeat_record is not None:
+            self.apply_repeat_selection()
+
+    def apply_repeat_selection(self):
+        record = self.repeat_record
+        self.repeat_record = None
+        branch = record.get("branch_id")
+        if branch in self.translation_ids:
+            self.translation.setCurrentIndex(self.translation_ids.index(branch))
+        start, end = record.get("start_id"), record.get("end_id")
+        if start is not None or end is not None:
+            self.scope.setCurrentIndex(3)
+            if start is not None:
+                index = self.start.findData(start)
+                if index >= 0:
+                    self.start.setCurrentIndex(index)
+            if end is not None:
+                index = self.end.findData(end)
+                if index >= 0:
+                    self.end.setCurrentIndex(index)
+        fmt = record.get("format", "epub")
+        pos = self.fmt.findText(fmt)
+        if pos >= 0:
+            self.fmt.setCurrentIndex(pos)
+        self.enqueue()
 
     def translation_changed(self):
         if not self.book:
@@ -493,6 +519,7 @@ class Window(QMainWindow):
             if not reference:
                 QMessageBox.information(self, "Повторить", "Для старой записи не сохранена ссылка на произведение.")
                 return
+            self.repeat_record = dict(record)
             self.reference.setText(reference)
             self.tabs.setCurrentIndex(0)
             self.find_book()
