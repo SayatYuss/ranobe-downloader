@@ -37,7 +37,7 @@ class Book:
         chapters = sorted((ch for ch in self._plan.chapters if branch_id is None
                            or any(b.branch_id == branch_id for b in ch.branches)),
                           key=_chapter_order)
-        return tuple({"volume": str(ch.volume), "number": str(ch.number),
+        return tuple({"id": getattr(ch, "id", None), "volume": str(ch.volume), "number": str(ch.number),
                       "name": ch.name} for ch in chapters)
 
 
@@ -85,6 +85,8 @@ class Downloader:
                  limit: int | None = None,
                  chapter_from: str | int | None = None,
                  chapter_to: str | int | None = None,
+                 chapter_start_id: int | None = None,
+                 chapter_end_id: int | None = None,
                  resume: bool = False,
                  cache_dir: str | Path = "output/.cache", delay: float = 1.0,
                  retries: int = 5, image_mode: str = "original",
@@ -128,6 +130,7 @@ class Downloader:
                 return self._backend.download(
                 book._plan, output, branch_id=branch_id, limit=limit,
                 chapter_from=chapter_from, chapter_to=chapter_to,
+                chapter_start_id=chapter_start_id, chapter_end_id=chapter_end_id,
                 progress=progress, resume=resume, cache_dir=cache_dir,
                 delay=delay, retries=retries, status=status,
                 image_mode=image_mode, image_quality=image_quality,
