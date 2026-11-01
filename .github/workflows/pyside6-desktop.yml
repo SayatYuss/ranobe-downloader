@@ -2,7 +2,7 @@ name: PySide6 desktop
 
 on:
   push:
-    branches: ["feature/pyside6-desktop"]
+    branches: ["feature/pyside6-desktop", "feature/pyside6-polish"]
     paths:
       - "interfaces/pyside6/**"
       - "pyproject.toml"
@@ -50,6 +50,13 @@ jobs:
       - name: Test desktop persistence
         shell: bash
         run: python -m unittest discover -s tests -p test_pyside6_storage.py -v
+      - name: Headless window smoke test
+        if: matrix.platform == 'linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+        shell: bash
+        run: python -m unittest discover -s tests -p test_pyside6_window.py -v
       - name: Headless import check
         shell: bash
         run: python -m interfaces.pyside6.app --check
