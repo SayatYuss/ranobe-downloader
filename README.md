@@ -1,6 +1,6 @@
 # Ranobe Downloader
 
-Скачивание произведений **RanobeLib** в EPUB 3, TXT и HTML. Проект включает CLI, Python-библиотеку, локальный HTTP API, Telegram-бота и Web UI. Все интерфейсы используют общее ядро скачивания.
+Скачивание произведений **RanobeLib** в EPUB 3, TXT и HTML. Проект включает настольное приложение на PySide6, CLI, Python-библиотеку, локальный HTTP API, Telegram-бота и Web UI. Все интерфейсы используют общее ядро скачивания.
 
 > **Alpha / экспериментальный проект.** Скачивайте только материалы, на использование которых у вас есть право. Уважайте правила сервиса и ограничения API. Недоступные платные главы нельзя получить в обход контроля доступа.
 
@@ -8,6 +8,7 @@
 
 | Компонент | Возможности | Инструкция |
 | --- | --- | --- |
+| Desktop | Нативное окно, очередь, история, кеш, токен и трей | [Desktop](docs/desktop.md) |
 | CLI | Скачивание, список глав, выбор переводов и диапазонов, аудит совместимости | [CLI](docs/cli-chapter-range.md) |
 | Python Library | Встраивание в собственные программы без консольного ввода | [Python API](docs/python-api.md) |
 | HTTP API | Swagger, задания, очередь, прогресс, отмена и очистка | [HTTP API](docs/http-api.md) |
@@ -16,7 +17,19 @@
 
 Ядро поддерживает кеш глав и изображений, продолжение скачивания (`--resume`), обработку HTTP 429 и оптимизацию изображений. Главы можно выбирать **по ID** (надёжно при одинаковых номерах в разных томах) либо по номеру в старом API. Форматы: EPUB с оглавлением, TXT без встроенных изображений, HTML со встроенными медиафайлами.
 
-## Требования
+## Быстрый старт: приложение для ПК
+
+В [Releases](https://github.com/SayatYuss/donwloader-private/releases) скачайте файл для своей ОС:
+
+| ОС | Файл |
+| --- | --- |
+| Windows x64 | `RanobeDownloader-Windows-x64.exe` |
+| macOS | `RanobeDownloader-macOS.dmg` |
+| Linux x86_64 | `RanobeDownloader-Linux-x86_64.AppImage` |
+
+Python и Node.js для готовых сборок не нужны. [Запуск и особенности приложения](docs/desktop.md).
+
+## Требования для запуска из исходников
 
 - Python **3.10+**.
 - Node.js и npm — **только для Web UI**.
@@ -57,6 +70,7 @@ ID `1001` и `1010` — **примеры**, замените их реальны
 python -m pip install -e '.[images]'    # оптимизация изображений через Pillow
 python -m pip install -e '.[http]'      # FastAPI + Uvicorn
 python -m pip install -e '.[telegram]'  # Telegram-бот
+python -m pip install -e '.[desktop,images]'  # приложение PySide6
 ```
 
 ## Web UI + HTTP API (локально)
@@ -109,6 +123,7 @@ core/                 движок, план, кеш, выбор глав и о�
 providers/libsocial/  провайдер RanobeLib
 exporters/            EPUB / TXT / HTML
 ranobe_downloader/    публичная Python-библиотека
+interfaces/pyside6/   настольное приложение Qt
 interfaces/cli/       CLI
 interfaces/http/      FastAPI
 interfaces/telegram/  Telegram-бот
@@ -120,12 +135,12 @@ docs/                 инструкции по интерфейсам
 ## Проверка и релиз
 
 ```bash
-python -m pip install -e '.[http,telegram,images]'
+python -m pip install -e '.[desktop,http,telegram,images]'
 python -m unittest discover -s tests -v
 cd web && npm install && npm run build
 ```
 
-Подробная инструкция проверки и подготовки выпуска **0.3.0**: [docs/release-0.3.0.md](docs/release-0.3.0.md). История: [CHANGELOG.md](CHANGELOG.md).
+Подготовка выпуска **0.4.0**: [docs/release-0.4.0.md](docs/release-0.4.0.md). История: [CHANGELOG.md](CHANGELOG.md).
 
 ## Ограничения
 
