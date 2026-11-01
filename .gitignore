@@ -1,3 +1,33 @@
+# Python
 venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Generated files
 output/
-__pycache__
+build/
+dist/
+*.spec
+AppDir/
+squashfs-root/
+*.AppImage
+*.dmg
+
+# Local secrets and diagnostics
+.env
+.env.*
+!.env.example
+*.log
+
+# Web
+node_modules/
+web/dist/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
