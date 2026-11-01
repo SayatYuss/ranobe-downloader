@@ -52,8 +52,8 @@ def range_from_indices(chapters, start: int | None, end: int | None):
     if start is not None and end is not None and start > end:
         raise ValueError("Конечная глава должна идти после начальной")
     return (
-        chapters[start]["number"] if start is not None else None,
-        chapters[end]["number"] if end is not None else None,
+        chapters[start]["id"] if start is not None else None,
+        chapters[end]["id"] if end is not None else None,
     )
 
 
@@ -274,7 +274,7 @@ def create_application(token: str, *, downloader_factory=None, output_dir="outpu
                 with downloader_factory() as client:
                     return client.download(
                         s.book, format=s.format, output=target, branch_id=s.branch,
-                        limit=s.limit, chapter_from=lower, chapter_to=upper,
+                        limit=s.limit, chapter_start_id=lower, chapter_end_id=upper,
                         cache_dir=directory / "cache", resume=True,
                     )
             async with semaphore:
