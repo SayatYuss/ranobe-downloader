@@ -28,9 +28,11 @@ classifiers = [
 [project.optional-dependencies]
 images = ["Pillow>=10,<13"]
 http = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+telegram = ["python-telegram-bot>=21.10,<23"]
 
 [project.scripts]
 ranobe = "main:main"
+ranobe-bot = "interfaces.telegram.ui:main"
 
 [tool.setuptools]
 py-modules = ["main"]
