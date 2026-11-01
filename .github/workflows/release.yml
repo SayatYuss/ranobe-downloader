@@ -60,8 +60,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          prerelease_flag=""
+          if [[ "$GITHUB_REF_NAME" =~ (a|b|rc|dev)[0-9]+ ]]; then
+            prerelease_flag="--prerelease"
+          fi
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            --prerelease \
+            $prerelease_flag \
             --verify-tag
