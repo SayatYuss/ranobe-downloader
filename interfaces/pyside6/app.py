@@ -21,7 +21,7 @@ from core.auth.storage import KeyringTokenStorage
 from providers.libsocial.client import LibSocialClient
 from providers.libsocial.cover import download_cover
 from ranobe_downloader import Downloader
-from .storage import Store, configure_logging
+from interfaces.pyside6.storage import Store, configure_logging
 
 log = logging.getLogger(__name__)
 GITHUB = "https://github.com/SayatYuss"
