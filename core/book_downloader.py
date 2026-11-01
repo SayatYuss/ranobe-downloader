@@ -10,6 +10,7 @@ from core.download.processor import ContentProcessor
 from core.download.statistics import DownloadStatistics
 from core.download.plan import DownloadPlan, make_translations
 from core.download.range import select_chapter_range
+from core.download.id_range import select_chapter_id_range
 from pathlib import Path
 from typing import Callable
 
@@ -72,6 +73,8 @@ class BookDownloader:
                  branch_id: int | None = None, limit: int | None = None,
                  chapter_from: str | int | None = None,
                  chapter_to: str | int | None = None,
+                 chapter_start_id: int | None = None,
+                 chapter_end_id: int | None = None,
                  progress: Callable[[int, int, str], None] | None = None,
                  resume: bool = False, cache_dir: str | Path = 'output/.cache',
                  delay: float = 1.0, retries: int = 5,
@@ -100,6 +103,9 @@ class BookDownloader:
         selected = [chapter for chapter in chapter_list
                     if branch_id is None or any(b.branch_id == branch_id for b in chapter.branches)]
         selected.sort(key=_chapter_order)
+        if (chapter_start_id is not None or chapter_end_id is not None) and (chapter_from is not None or chapter_to is not None):
+            raise ValueError('Choose either chapter IDs or chapter numbers, not both')
+        selected = select_chapter_id_range(selected, chapter_start_id, chapter_end_id)
         selected = select_chapter_range(selected, chapter_from, chapter_to)
         if limit is not None:
             selected = selected[:limit]
