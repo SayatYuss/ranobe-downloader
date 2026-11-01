@@ -1,35 +1,9 @@
-# Chapter selection (Python API)
+# Диапазоны глав в Python
 
-The downloader can select a **specific inclusive range of chapter numbers**
-after selecting a translation branch. Decimal chapter numbers are compared
-exactly (using `Decimal`), not as floating-point indexes.
+Актуальные правила ID, номеров, переводов и включения границ собраны в [руководстве по выбору глав](chapter-id-selection.md).
 
-```python
-from ranobe_downloader import Downloader
+Для выбора по номерам используйте `chapter_from` и `chapter_to`, например `chapter_from="13.4", chapter_to="45"`. Эти значения должны существовать и однозначно определять главы выбранного перевода. При повторении номеров в разных томах используйте `chapter_start_id` и `chapter_end_id`.
 
-with Downloader() as downloader:
-    book = downloader.get_book("271947--example")
-    for chapter in book.list_chapters(branch_id=123):
-        print(chapter["volume"], chapter["number"], chapter["name"])
+Диапазоны поддерживаются ядром, Python API, CLI и HTTP API; Desktop, Web UI и Telegram предлагают выбор глав через интерфейс.
 
-    path = downloader.download(
-        book,
-        format="epub",
-        branch_id=123,
-        chapter_from="13.4",
-        chapter_to="45",
-        resume=True,
-    )
-```
-
-Both bounds are optional; when both are omitted all chapters are selected.
-Bounds are inclusive and must match numbers that actually occur in the selected
-translation. Reversed, missing, invalid and ambiguous-across-volumes boundaries
-are rejected before any chapter contents are downloaded. `limit`, if supplied,
-applies **after** range filtering.
-
-This feature is implemented in the core and Python API; it is **not yet wired**
-to the CLI, Web API or Telegram bot.
-
-The index contains chapters across all translations. Use
-`book.list_chapters(branch_id=...)` to view the relevant translation.
+[Все руководства](README.md)

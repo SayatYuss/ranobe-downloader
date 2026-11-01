@@ -1,26 +1,32 @@
-# HTTP API chapter selection
+# Диапазоны глав через HTTP
 
-List chapters without downloading chapter bodies:
+[HTTP API](http-api.md) · [Правила выбора глав](chapter-id-selection.md)
 
-```http
-GET /api/books/chapters?reference=271947--example&branch_id=123
-```
+Сначала запустите сервер и откройте **http://127.0.0.1:8000/docs**.
 
-Response includes `book_id`, `branch_id`, and an ordered `chapters` array containing `volume`, `number`, and `name`.
+## Получить ID
 
-Start an inclusive range download:
+В `GET /api/books` передайте реальную ссылку в `reference`; выберите `branch_id` перевода из ответа. Затем вызовите `GET /api/books/chapters` с этой ссылкой и переводом.
+
+Ответ содержит `book_id`, `branch_id` и упорядоченный массив `chapters`: `id`, `volume`, `number`, `name`. Текст глав пока не скачивается.
+
+## Создать задание
+
+Отправьте JSON в `POST /api/downloads`. Числа `123`, `1001`, `1010` — условные примеры: замените их полученными ID.
 
 ```json
 {
-  "reference": "271947--example",
+  "reference": "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ",
   "format": "epub",
   "branch_id": 123,
-  "chapter_from": "13.4",
-  "chapter_to": "45",
+  "chapter_start_id": 1001,
+  "chapter_end_id": 1010,
   "resume": true
 }
 ```
 
-Send the body to `POST /api/downloads` and track it using `GET /api/downloads/{id}`. The chapter numbers are strings to preserve decimal precision; both bounds are optional and must exist in the selected translation. Invalid ranges currently appear as failed asynchronous jobs because they are checked by the core after submission.
+Обе границы включаются. ID могут не возрастать численно: используется порядок чтения в выбранном переводе.
 
-The API remains intended for localhost only until authentication and rate limiting are added.
+Альтернатива — `chapter_from: "13.4"`, `chapter_to: "45"`, если номера существуют и однозначны. Не смешивайте границы по номерам и ID. Границы необязательны; `limit` применяется после выбора диапазона.
+
+Часть ошибок проверяется сразу; ошибки диапазона ядра могут появиться как `failed` у созданного задания. После 202 следите за статусом — [управление заданиями](http-jobs.md).

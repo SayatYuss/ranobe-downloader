@@ -1,17 +1,68 @@
-# CLI: chapter index and ranges
+# Командная строка (CLI)
 
-List chapter numbers for one translation without downloading chapter contents:
+[Все руководства](README.md) · [Установка](installation.md)
+
+CLI подходит для загрузки из терминала и скриптов. После установки базового пакета доступны команды `ranobe`.
+
+## Первая загрузка
+
+В примерах замените `ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ` реальной ссылкой с RanobeLib:
 
 ```bash
-ranobe download '271947--example' --branch 123 --list-chapters
+ranobe download "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ" --limit 10 --format epub --resume
 ```
 
-Download an inclusive range of chapter **numbers** (not positions):
+При нескольких переводах в интерактивном терминале появится выбор. Результат по умолчанию сохраняется в `output/` относительно текущей папки. CLI выводит путь готового файла.
 
 ```bash
-ranobe download '271947--example' --branch 123 --from 13.4 --to 45 --format epub
+ranobe download "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ" --format txt --output output/book.txt
 ```
 
-`--chapter-from` and `--chapter-to` are aliases of `--from` and `--to`. Both bounds are optional. `--limit N` limits the number of chapters **after** the range is applied. Chapter numbers are handled as exact decimal strings. Boundaries must exist in the selected translation branch.
+Поддерживаются `epub`, `txt` и `html`; по умолчанию — EPUB.
 
-Use `--list-chapters` first to inspect valid numbers. For books with multiple translation branches, use `--branch ID` (or choose interactively if a terminal is attached). Chapter listings contain metadata only; chapter content is not downloaded.
+## Переводы и главы
+
+```bash
+ranobe download "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ" --list-chapters
+```
+
+Укажите `--branch ID`, если нужен определённый перевод. ID перевода берётся из интерактивного выбора; ID главы — из списка глав. Это разные идентификаторы.
+
+Следующие числа — **условные примеры**. Замените `123`, `1001` и `1010` значениями выбранной книги:
+
+```bash
+ranobe download "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ" --branch 123 --list-chapters
+ranobe download "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ" --branch 123 --start-id 1001 --end-id 1010 --resume
+```
+
+Обе границы включаются. ID выбирает конкретную главу даже при одинаковых номерах в разных томах. Подробнее: [правила выбора глав](chapter-id-selection.md).
+
+## Основные параметры
+
+| Параметр | Назначение |
+| --- | --- |
+| `--branch ID` | Перевод |
+| `--start-id ID`, `--end-id ID` | Начальная/конечная глава |
+| `--from NUMBER`, `--to NUMBER` | Диапазон по номерам; только при однозначных границах |
+| `--limit N` | Не более N глав после применения диапазона |
+| `--format epub|txt|html` | Формат |
+| `--output PATH` | Путь выходного файла |
+| `--resume` | Повторно использовать проверенный кеш |
+| `--cache-dir PATH` | Каталог кеша; по умолчанию `output/.cache` |
+| `--non-interactive` | Отключить меню выбора; полезно для скриптов |
+| `--delay SECONDS`, `--retries N` | Задержка и число попыток |
+| `--image-mode optimized` | Оптимизация изображений; требуется дополнение `images` |
+
+Для скриптов явно указывайте перевод, если их несколько. Границы по ID нельзя смешивать с границами по номерам. `--chapter-from`/`--chapter-to` — синонимы `--from`/`--to`.
+
+## Авторизация и справка
+
+```bash
+ranobe login
+ranobe status
+ranobe --help
+ranobe download --help
+ranobe audit --help
+```
+
+Команда `audit` проверяет совместимость произведений и создаёт отчёты; это не обязательный этап скачивания. Хранение токена описано в [авторизации](authentication.md).
