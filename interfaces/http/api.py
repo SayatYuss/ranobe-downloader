@@ -152,18 +152,33 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Failed to fetch chapter index") from exc
 
+    class CancelledDownload(Exception):
+        pass
+
     def run_job(job_id: str, request: DownloadRequest):
         with lock:
             job = jobs[job_id]
-            job.state = "running"
+            if job.cancel.is_set():
+                finish(job, "cancelled")
+                refresh_queue()
+                return
+            finish(job, "running")
+            refresh_queue()
+
+        def check_cancel():
+            if job.cancel.is_set():
+                raise CancelledDownload()
 
         def progress(current: int, total: int, message: str):
+            check_cancel()
             with lock:
                 job.current, job.total, job.message = current, total, message
+                job.updated = time.time()
 
+        target = base / f"{job_id}.{request.format}"
         try:
+            check_cancel()
             base.mkdir(parents=True, exist_ok=True)
-            target = base / f"{job_id}.{request.format}"
             with downloader_factory() as downloader:
                 result = downloader.download(
                     request.reference, format=request.format, output=target,
@@ -174,34 +189,99 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
                     resume=request.resume, progress=progress,
                     cache_dir=base / "cache",
                 )
+            check_cancel()
             result_path = Path(result).resolve()
             if result_path != target or not result_path.is_file():
                 raise RuntimeError("Downloader did not produce the expected file")
             with lock:
-                job.path = result_path
-                job.filename = target.name
-                job.state = "completed"
+                if job.cancel.is_set():
+                    finish(job, "cancelled")
+                else:
+                    job.path = result_path
+                    job.filename = target.name
+                    finish(job, "completed")
+        except CancelledDownload:
+            with lock:
+                finish(job, "cancelled")
         except Exception:
             with lock:
-                job.state = "failed"
-                job.error = "Download failed; inspect server logs"
+                if job.cancel.is_set():
+                    finish(job, "cancelled")
+                else:
+                    finish(job, "failed", "Download failed; inspect server logs")
+        finally:
+            if job.state != "completed":
+                target.unlink(missing_ok=True)
 
     @app.post("/api/downloads", status_code=202)
     def start_download(request: DownloadRequest):
+        cleanup_expired()
         if request.format not in FORMATS:
             raise HTTPException(status_code=422, detail="Unsupported export format")
+        if (request.chapter_start_id is not None or request.chapter_end_id is not None) and (
+            request.chapter_from is not None or request.chapter_to is not None
+        ):
+            raise HTTPException(status_code=422, detail="Use IDs or chapter numbers, not both")
         with lock:
             if len(jobs) >= max_jobs:
                 raise HTTPException(status_code=429, detail="Download job capacity reached")
-            job_id = uuid4().hex
-            jobs[job_id] = Job(id=job_id, format=request.format)
-        try:
-            executor.submit(run_job, job_id, request)
-        except RuntimeError as exc:
-            with lock:
-                jobs.pop(job_id, None)
-            raise HTTPException(status_code=503, detail="Downloader is shutting down") from exc
-        return snapshot(job_id)
+            running = sum(j.state in ("running", "cancelling") for j in jobs.values())
+            waiting = sum(j.state == "queued" for j in jobs.values())
+            if waiting >= max_queue and (running >= max_workers or waiting > 0):
+                raise HTTPException(status_code=429, detail="Download queue is full")
+            jid = uuid4().hex
+            jobs[jid] = Job(id=jid, format=request.format)
+            queue.append(jid)
+            refresh_queue()
+            try:
+                futures[jid] = executor.submit(run_job, jid, request)
+            except RuntimeError as exc:
+                jobs.pop(jid)
+                refresh_queue()
+                raise HTTPException(status_code=503, detail="Downloader is shutting down") from exc
+        return snapshot(jid)
+
+    @app.get("/api/downloads")
+    def list_downloads():
+        cleanup_expired()
+        with lock:
+            refresh_queue()
+            return {"jobs": [j.public() for j in jobs.values()],
+                    "queued": len(queue),
+                    "running": sum(j.state in ("running", "cancelling") for j in jobs.values()),
+                    "max_workers": max_workers, "max_queue": max_queue}
+
+    @app.post("/api/downloads/{job_id}/cancel")
+    def cancel_download(job_id: str):
+        cleanup_expired()
+        with lock:
+            job = jobs.get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail="Unknown download")
+            if job.state in ("completed", "failed", "cancelled"):
+                raise HTTPException(status_code=409, detail="Job already finished")
+            job.cancel.set()
+            future = futures.get(job_id)
+            if job.state == "queued" and future is not None and future.cancel():
+                finish(job, "cancelled")
+                refresh_queue()
+            else:
+                finish(job, "cancelling")
+            return job.public()
+
+    @app.delete("/api/downloads/{job_id}", status_code=204)
+    def delete_download(job_id: str):
+        cleanup_expired()
+        with lock:
+            job = jobs.get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail="Unknown download")
+            if job.state not in ("completed", "failed", "cancelled"):
+                raise HTTPException(status_code=409, detail="Job is still active")
+            jobs.pop(job_id)
+            futures.pop(job_id, None)
+            path = base / f"{job_id}.{job.format}"
+        path.unlink(missing_ok=True)
 
     @app.get("/api/downloads/{job_id}")
     def get_download(job_id: str):
