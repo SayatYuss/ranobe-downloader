@@ -27,6 +27,8 @@ class DownloadRequest(BaseModel):
     resume: bool = False
     chapter_from: str | None = Field(default=None, max_length=64)
     chapter_to: str | None = Field(default=None, max_length=64)
+    chapter_start_id: int | None = Field(default=None, ge=1)
+    chapter_end_id: int | None = Field(default=None, ge=1)
 
 
 @dataclass
@@ -135,6 +137,8 @@ def create_app(*, downloader_factory: Callable[[], Downloader] = Downloader,
                     request.reference, format=request.format, output=target,
                     branch_id=request.branch_id, limit=request.limit,
                     chapter_from=request.chapter_from, chapter_to=request.chapter_to,
+                    chapter_start_id=request.chapter_start_id,
+                    chapter_end_id=request.chapter_end_id,
                     resume=request.resume, progress=progress,
                     cache_dir=base / "cache",
                 )
