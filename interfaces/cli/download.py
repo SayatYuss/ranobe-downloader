@@ -88,7 +88,9 @@ def execute(args: argparse.Namespace) -> None:
                 if not chapters:
                     raise ValueError('No chapters in selected translation branch')
                 for chapter in chapters:
-                    print(f'{chapter.volume}/{chapter.number} [ID {getattr(chapter, "id", "unknown")}] — {chapter.name or "Без названия"}')
+                    cid = getattr(chapter, "id", None)
+                    id_label = f" [ID {cid}]" if cid is not None else ""
+                    print(f'{chapter.volume}/{chapter.number}{id_label} — {chapter.name or "Без названия"}')
                 return
             slug = plan.title.slug_url
             if not re.fullmatch(r"[A-Za-z0-9_-]+", slug):
