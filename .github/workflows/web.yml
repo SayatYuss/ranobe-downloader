@@ -1,0 +1,24 @@
+name: Web UI checks
+
+on:
+  push:
+    branches: [develop, main, "feature/**"]
+    paths: ["web/**", ".github/workflows/web.yml"]
+  pull_request:
+    branches: [develop, main]
+    paths: ["web/**", ".github/workflows/web.yml"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        working-directory: web
+        run: npm install --no-audit --no-fund
+      - name: Type check and build
+        working-directory: web
+        run: npm run build
