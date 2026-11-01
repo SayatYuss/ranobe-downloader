@@ -151,9 +151,17 @@ def create_application(token: str, *, downloader_factory=None, output_dir="outpu
     async def choose_format(query, s):
         chapters = chapters_of(s)
         lower, upper = range_from_indices(chapters, s.start, s.end)
-        desc = ("Вся книга" if lower is None and upper is None and s.limit is None
-                else f"С {lower or 'начала'} по {upper or 'конец'}"
-                if s.limit is None else f"Первые {s.limit} глав")
+        if s.limit is not None:
+            desc = f"Первые {s.limit} глав"
+        elif s.start is None and s.end is None:
+            desc = "Вся книга"
+        else:
+            def label(index):
+                if index is None:
+                    return "начала" if s.start is None and index == s.start else "конца"
+                item = chapters[index]
+                return f"{item['volume']}/{item['number']}"
+            desc = f"С {label(s.start)} по {label(s.end)}"
         await replace(query, s, f"Выбрано: {desc}\nТеперь выбери формат:", [
             [("EPUB", "fmt:epub"), ("TXT", "fmt:txt"), ("HTML", "fmt:html")],
             [("Изменить главы", "scope")],
