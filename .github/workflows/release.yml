@@ -55,6 +55,17 @@ jobs:
           /tmp/ranobe-wheel-test/bin/python -m pip install dist/*.whl
           /tmp/ranobe-wheel-test/bin/ranobe --version
           /tmp/ranobe-wheel-test/bin/ranobe download --help
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build Web UI distribution
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Package Web UI as static archive
+        shell: bash
+        run: tar -czf "dist/ranobe-web-${GITHUB_REF_NAME}.tar.gz" -C web/dist .
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
