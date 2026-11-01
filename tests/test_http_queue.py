@@ -7,6 +7,39 @@ from fastapi.testclient import TestClient
 from interfaces.http.api import create_app
 
 class QueueTests(unittest.TestCase):
+    def test_running_cancel(self):
+        started = threading.Event()
+        release = threading.Event()
+        class Worker:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def download(self, reference, *, output, progress, **kwargs):
+                started.set()
+                release.wait(5)
+                progress(1, 1, "done")
+                Path(output).write_text("ok")
+                return output
+        with tempfile.TemporaryDirectory() as directory:
+            client = TestClient(create_app(downloader_factory=Worker,
+                                           output_dir=directory, max_workers=1))
+            result = client.post("/api/downloads", json={"reference": "book"})
+            jid = result.json()["id"]
+            try:
+                self.assertTrue(started.wait(2))
+                self.assertEqual(client.delete(f"/api/downloads/{jid}").status_code, 409)
+                cancelled = client.post(f"/api/downloads/{jid}/cancel")
+                self.assertEqual(cancelled.status_code, 200)
+                self.assertEqual(cancelled.json()["state"], "cancelling")
+                release.set()
+                for _ in range(100):
+                    state = client.get(f"/api/downloads/{jid}").json()["state"]
+                    if state == "cancelled": break
+                    time.sleep(0.01)
+                self.assertEqual(state, "cancelled")
+                self.assertEqual(client.get(f"/api/downloads/{jid}/file").status_code, 409)
+            finally:
+                release.set()
+
     def test_queue_cancel_and_cleanup(self):
         gate = threading.Event()
         started = threading.Event()
