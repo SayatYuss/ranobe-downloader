@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Ranobe Downloader
+Exec=RanobeDownloader
+Icon=ranobe
+Type=Application
+Categories=Network;Utility;
+Terminal=false
