@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    if: github.repository == 'SayatYuss/donwloader-private'
+    if: github.repository == 'SayatYuss/ranobe-downloader'
     runs-on: ubuntu-latest
     permissions:
       contents: write
