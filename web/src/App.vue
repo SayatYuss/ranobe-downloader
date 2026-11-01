@@ -34,8 +34,9 @@ const activeCount = computed(() => jobs.value.filter(j => ['queued', 'running', 
 
 function explain(e: unknown) { return e instanceof Error ? e.message : 'Произошла ошибка' }
 function chapterLabel(ch: Chapter) { return (ch.volume && ch.volume !== '0' ? 'Том ' + ch.volume + ' · ' : '') + 'Глава ' + ch.number + (ch.name ? ' — ' + ch.name : '') }
-function setScope(value: typeof scope.value) {
-  scope.value = value
+function setScope(value: string) {
+  if (!['all', 'range', 'first', 'last'].includes(value)) return
+  scope.value = value as 'all' | 'range' | 'first' | 'last'
   if (value === 'range' && chapters.value.length) {
     startId.value = chapters.value[0].id
     endId.value = chapters.value[chapters.value.length - 1].id
@@ -145,7 +146,7 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
             <div v-if="chaptersLoading" class="muted">Загружаем список глав…</div>
             <template v-else-if="chapters.length">
               <div class="scope-grid">
-                <button v-for="opt in [{ v: 'all', icon: '▦', name: 'Вся книга', sub: 'Все доступные главы' }, { v: 'first', icon: 'Ⅰ', name: 'Первые 10', sub: 'Начало истории' }, { v: 'last', icon: '↧', name: 'Последние 10', sub: 'Самые новые главы' }, { v: 'range', icon: '⇄', name: 'Диапазон', sub: 'Выбрать вручную' }]" :key="opt.v" :class="['scope-option', { selected: scope === opt.v }]" @click="setScope(opt.v as typeof scope)"><span class="opt-icon">{{ opt.icon }}</span><strong>{{ opt.name }}</strong><small>{{ opt.sub }}</small><span v-if="scope === opt.v" class="selected-mark">✓</span></button>
+                <button v-for="opt in [{ v: 'all', icon: '▦', name: 'Вся книга', sub: 'Все доступные главы' }, { v: 'first', icon: 'Ⅰ', name: 'Первые 10', sub: 'Начало истории' }, { v: 'last', icon: '↧', name: 'Последние 10', sub: 'Самые новые главы' }, { v: 'range', icon: '⇄', name: 'Диапазон', sub: 'Выбрать вручную' }]" :key="opt.v" :class="['scope-option', { selected: scope === opt.v }]" @click="setScope(opt.v)"><span class="opt-icon">{{ opt.icon }}</span><strong>{{ opt.name }}</strong><small>{{ opt.sub }}</small><span v-if="scope === opt.v" class="selected-mark">✓</span></button>
               </div>
               <div v-if="scope === 'range'" class="range-grid"><div class="field"><label for="start">НАЧАЛЬНАЯ ГЛАВА</label><select id="start" v-model="startId"><option v-for="ch in chapters" :key="ch.id" :value="ch.id">{{ chapterLabel(ch) }}</option></select></div><div class="field"><label for="end">КОНЕЧНАЯ ГЛАВА</label><select id="end" v-model="endId"><option v-for="ch in chapters" :key="ch.id" :value="ch.id">{{ chapterLabel(ch) }}</option></select></div></div>
               <div class="selection-summary"><span>◉</span> Выбрано глав: <strong>{{ chosenCount }}</strong> <span class="summary-right">из {{ chapters.length }} доступных</span></div>
