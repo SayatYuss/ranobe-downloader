@@ -440,6 +440,10 @@ class Window(QMainWindow):
 
 
 def main():
+    if "--check" in sys.argv:
+        import PySide6
+        from ranobe_downloader import Downloader
+        return 0
     app = QApplication(sys.argv)
     app.setApplicationName("RanobeDownloader")
     app.setQuitOnLastWindowClosed(False)
