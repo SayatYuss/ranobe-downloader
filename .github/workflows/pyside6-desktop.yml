@@ -55,7 +55,6 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --name RanobeDownloader \
             --collect-submodules keyring.backends \
-            --collect-submodules PySide6 \
             ${{ matrix.platform == 'windows' && '--onefile --noconsole' || '--onedir' }} \
             ${{ matrix.platform == 'macos' && '--windowed' || '' }} \
             interfaces/pyside6/app.py
