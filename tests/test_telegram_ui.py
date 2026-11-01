@@ -12,13 +12,13 @@ except ImportError:
 class TelegramUiTests(unittest.TestCase):
     def test_chapter_bounds(self):
         chapters = [
-            {"number": "1", "volume": "1"},
-            {"number": "13.4", "volume": "1"},
-            {"number": "45", "volume": "1"},
+            {"id": 100, "number": "1", "volume": "1"},
+            {"id": 222, "number": "13.4", "volume": "1"},
+            {"id": 101, "number": "45", "volume": "1"},
         ]
-        self.assertEqual(range_from_indices(chapters, 1, 2), ("13.4", "45"))
-        self.assertEqual(range_from_indices(chapters, None, 2), (None, "45"))
-        self.assertEqual(range_from_indices(chapters, 1, None), ("13.4", None))
+        self.assertEqual(range_from_indices(chapters, 1, 2), (222, 101))
+        self.assertEqual(range_from_indices(chapters, None, 2), (None, 101))
+        self.assertEqual(range_from_indices(chapters, 1, None), (222, None))
         for start, end in [(2, 1), (-1, 1), (0, 3)]:
             with self.subTest(start=start, end=end), self.assertRaises(ValueError):
                 range_from_indices(chapters, start, end)
