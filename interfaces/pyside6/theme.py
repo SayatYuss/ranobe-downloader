@@ -1,14 +1,20 @@
 """Compact neutral Qt styling with system/light/dark palette support."""
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
 def apply_theme(app: QApplication, mode: str = "system"):
     app.setStyle("Fusion")
-    if mode == "system":
-        app.setPalette(app.style().standardPalette())
-        app.setStyleSheet(STYLE)
-        return
-    dark = mode == "dark"
+    app._desktop_theme_mode = mode
+    if not getattr(app, "_desktop_theme_connected", False):
+        app.styleHints().colorSchemeChanged.connect(
+            lambda _: apply_theme(app, "system")
+            if app._desktop_theme_mode == "system" else None
+        )
+        app._desktop_theme_connected = True
+    dark = mode == "dark" or (
+        mode == "system" and app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    )
     base = "#202124" if dark else "#ffffff"
     surface = "#292b2e" if dark else "#f6f6f6"
     text = "#eeeeee" if dark else "#202124"
@@ -43,8 +49,9 @@ QLineEdit, QComboBox, QPlainTextEdit, QTableWidget {
     border: 1px solid palette(mid); border-radius: 6px; padding: 7px;
 }
 QPushButton { padding: 8px 16px; border: 1px solid palette(mid); border-radius: 6px; }
-QPushButton:disabled { opacity: 0.5; }
+QPushButton:disabled { color: palette(mid); }
 QProgressBar { border: 1px solid palette(mid); border-radius: 4px; text-align: center; height: 12px; }
 QProgressBar::chunk { background: palette(midlight); border-radius: 3px; }
 QHeaderView::section { padding: 8px; border: 0; border-bottom: 1px solid palette(mid); }
 """
+

@@ -9,7 +9,7 @@ from collections import deque
 from threading import Event
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Qt, Signal, QUrl
+from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
@@ -72,12 +72,21 @@ class DownloadCancelled(Exception):
 
 
 def perform_download(task, book, branch, fmt, start_id, end_id, path, cache, token):
+    def check_cancel(*_):
+        if task.cancel.is_set():
+            raise DownloadCancelled()
+
+    def progress(current, total, chapter):
+        check_cancel()
+        task.progress.emit(current, total, chapter)
+
+    check_cancel()
     with Downloader(token=token) as downloader:
         return downloader.download(
             book, branch_id=branch, format=fmt, output=path,
             chapter_start_id=start_id, chapter_end_id=end_id,
             cache_dir=cache, resume=True,
-            progress=lambda a, b, name: (task.cancel.is_set() and (_ for _ in ()).throw(DownloadCancelled())) or task.progress.emit(a, b, name),
+            progress=progress, status=check_cancel,
         )
 
 
@@ -96,6 +105,7 @@ class Window(QMainWindow):
         self.active_paths = set()
         self.history_indices = []
         self.repeat_record = None
+        self.lookup_pending = False
         self.running = False
         self.threads = []
         self.tasks = []
@@ -127,7 +137,7 @@ class Window(QMainWindow):
         self.reference = QLineEdit()
         self.reference.setPlaceholderText("Ссылка на RanobeLib")
         ref_line.addWidget(self.reference)
-        find = QPushButton("Найти")
+        find = self.find_button = QPushButton("Найти")
         find.clicked.connect(self.find_book)
         ref_line.addWidget(find)
         form.addRow("Ссылка", ref_line)
@@ -264,7 +274,7 @@ class Window(QMainWindow):
         quit_action.triggered.connect(self.quit_app)
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
-        self.tray.activated.connect(lambda *_: self.restore_from_tray())
+        self.tray.activated.connect(self.tray_activated)
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray.show()
         self.reload_history()
@@ -277,8 +287,10 @@ class Window(QMainWindow):
         task = Task(operation, *args)
         task.moveToThread(thread)
         thread.started.connect(task.run)
-        task.done.connect(on_done)
-        task.failed.connect(on_failure or self.report_error)
+        task.on_done = on_done
+        task.on_failure = on_failure or self.report_error
+        task.done.connect(self.task_done)
+        task.failed.connect(self.task_failed)
         task.done.connect(thread.quit)
         task.failed.connect(thread.quit)
         thread.finished.connect(task.deleteLater)
@@ -292,6 +304,15 @@ class Window(QMainWindow):
         if operation == perform_download:
             task.progress.connect(self.on_progress)
         thread.start()
+        self.update_queue()
+
+    @Slot(object)
+    def task_done(self, result):
+        self.sender().on_done(result)
+
+    @Slot(str)
+    def task_failed(self, message):
+        self.sender().on_failure(message)
 
     def report_error(self, message):
         self.status.setText("Ошибка: " + message)
@@ -299,12 +320,26 @@ class Window(QMainWindow):
 
     def find_book(self):
         reference = self.reference.text().strip()
-        if not reference:
+        if not reference or self.lookup_pending:
             return
+        self.lookup_pending = True
+        self.find_button.setEnabled(False)
+        self.add_button.setEnabled(False)
         self.status.setText("Загрузка данных…")
-        self.run_task(lookup, reference, self.token_store.load(), on_done=self.book_loaded)
+        self.run_task(lookup, reference, self.token_store.load(), on_done=self.book_loaded, on_failure=self.lookup_failed)
+
+    def lookup_failed(self, message):
+        self.lookup_pending = False
+        self.find_button.setEnabled(True)
+        self.add_button.setEnabled(True)
+        self.repeat_record = None
+        self.report_error(message)
 
     def book_loaded(self, result):
+        self.lookup_pending = False
+        self.find_button.setEnabled(True)
+        self.add_button.setEnabled(True)
+        self.scope.setCurrentIndex(0)
         self.book, cover = result
         self.title_label.setText(self.book.title)
         self.cover.clear()
@@ -330,9 +365,16 @@ class Window(QMainWindow):
         record = self.repeat_record
         self.repeat_record = None
         branch = record.get("branch_id")
+        if branch is not None and branch not in self.translation_ids:
+            QMessageBox.warning(self, "Повторить", "Сохранённый перевод больше недоступен")
+            return
         if branch in self.translation_ids:
             self.translation.setCurrentIndex(self.translation_ids.index(branch))
         start, end = record.get("start_id"), record.get("end_id")
+        if any(value is not None and self.start.findData(value) < 0 for value in (start, end)):
+            QMessageBox.warning(self, "Повторить", "Сохранённый диапазон больше недоступен")
+            return
+        self.scope.setCurrentIndex(0)
         if start is not None or end is not None:
             self.scope.setCurrentIndex(3)
             if start is not None:
@@ -370,7 +412,7 @@ class Window(QMainWindow):
         self.end.setEnabled(enabled)
 
     def enqueue(self):
-        if not self.book or not self.chapters:
+        if self.lookup_pending or not self.book or not self.chapters:
             QMessageBox.warning(self, "Главы", "Не выбраны главы")
             return
         branch = self.translation_ids[self.translation.currentIndex()]
@@ -418,7 +460,9 @@ class Window(QMainWindow):
     def cancel_current(self):
         if self.current_task:
             self.current_task.cancel.set()
-            self.status.setText("Отмена после текущей главы…")
+            self.status.setText("Отмена после текущей операции…")
+            self.queue_table.setItem(0, 2, QTableWidgetItem("Отменяется"))
+            self.cancel_button.setEnabled(False)
 
     def run_next(self):
         if self.running or not self.pending:
@@ -576,6 +620,10 @@ class Window(QMainWindow):
             self.find_book()
             event.acceptProposedAction()
 
+    def tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            self.restore_from_tray()
+
     def restore_from_tray(self):
         self.showNormal()
         self.raise_()
@@ -585,15 +633,15 @@ class Window(QMainWindow):
         if not self.exiting and self.tray.isVisible():
             self.hide()
             event.ignore()
-        elif self.running or self.pending:
-            QMessageBox.information(self, "Загрузка", "Есть активные или ожидающие загрузки")
+        elif self.running or self.pending or self.threads:
+            QMessageBox.information(self, "Загрузка", "Дождитесь завершения фоновых операций")
             event.ignore()
         else:
             event.accept()
 
     def quit_app(self):
-        if self.running or self.pending:
-            QMessageBox.information(self, "Загрузка", "Есть активные или ожидающие загрузки")
+        if self.running or self.pending or self.threads:
+            QMessageBox.information(self, "Загрузка", "Дождитесь завершения фоновых операций")
             return
         self.exiting = True
         self.tray.hide()
@@ -616,3 +664,4 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
