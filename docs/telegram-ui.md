@@ -25,6 +25,6 @@ Large files: the standard configuration refuses to upload files greater than **4
 - Session and selections exist only in process memory and are lost on restart.
 - One running download per user, two concurrent downloads per process by default.
 - Keep `TELEGRAM_ALLOWED_USER_IDS` set when using a personal bot. Without it, any Telegram account can request downloads.
-- The original chapter-range core uses numeric boundaries. Books with repeated chapter numbers across volumes or nonnumeric identifiers may need separate core support for selection by chapter IDs.
+- Выбор диапазона выполняется по ID глав в пределах выбранного перевода; том и номер показываются только для удобства пользователя.
 - No full-book search, inline Telegram mode, Telegram payments, or externally hosted infrastructure is required.
 - Library HTTP logs are reduced to WARNING to avoid exposing bot tokens in request URLs. Revoke any BotFather token already exposed in logs.
