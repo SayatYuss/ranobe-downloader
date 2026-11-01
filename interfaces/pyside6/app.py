@@ -257,13 +257,13 @@ class Window(QMainWindow):
         self.tray.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
         menu = QMenu()
         show = QAction("Открыть", self)
-        show.triggered.connect(self.showNormal)
+        show.triggered.connect(self.restore_from_tray)
         menu.addAction(show)
         quit_action = QAction("Выход", self)
         quit_action.triggered.connect(self.quit_app)
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
-        self.tray.activated.connect(lambda *_: self.showNormal())
+        self.tray.activated.connect(lambda *_: self.restore_from_tray())
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray.show()
         self.reload_history()
@@ -414,7 +414,7 @@ class Window(QMainWindow):
             self.current_task = None
             self.current = None
             self.active_paths.discard(path)
-            self.store.add_download(title=book.title, path=Path(saved), fmt=fmt)
+            self.store.add_download(title=book.title, path=Path(saved), fmt=fmt, reference=book.slug_url, branch_id=branch, start_id=start, end_id=end)
             self.reload_history()
             self.status.setText(f"Сохранено: {saved}")
             if self.tray.isVisible():
@@ -488,7 +488,14 @@ class Window(QMainWindow):
     def redownload_history(self):
         index = self.selected_history_index()
         if index is not None:
-            QMessageBox.information(self, "Повторить", "Вставьте ссылку на произведение во вкладке «Скачать». История пока не содержит исходную ссылку.")
+            record = self.store.history[index]
+            reference = record.get("reference")
+            if not reference:
+                QMessageBox.information(self, "Повторить", "Для старой записи не сохранена ссылка на произведение.")
+                return
+            self.reference.setText(reference)
+            self.tabs.setCurrentIndex(0)
+            self.find_book()
 
     def change_theme(self):
         mode = ("system", "light", "dark")[self.theme_box.currentIndex()]
@@ -546,19 +553,24 @@ class Window(QMainWindow):
             self.find_book()
             event.acceptProposedAction()
 
+    def restore_from_tray(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
     def closeEvent(self, event):
         if not self.exiting and self.tray.isVisible():
             self.hide()
             event.ignore()
-        elif self.running:
-            QMessageBox.information(self, "Загрузка", "Дождитесь завершения загрузки")
+        elif self.running or self.pending:
+            QMessageBox.information(self, "Загрузка", "Есть активные или ожидающие загрузки")
             event.ignore()
         else:
             event.accept()
 
     def quit_app(self):
-        if self.running:
-            QMessageBox.information(self, "Загрузка", "Дождитесь завершения загрузки")
+        if self.running or self.pending:
+            QMessageBox.information(self, "Загрузка", "Есть активные или ожидающие загрузки")
             return
         self.exiting = True
         self.tray.hide()
