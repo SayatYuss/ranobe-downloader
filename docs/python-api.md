@@ -1,46 +1,80 @@
-# Python library API
+# Python API
 
-Install the project in editable mode from the repository:
+[Все руководства](README.md) · [Установка](installation.md)
 
-```bash
-python -m pip install -e .
-```
+Библиотека `ranobe_downloader` позволяет получать метаданные и скачивать книги из Python без терминальных меню. Достаточно базовой установки пакета; отдельный HTTP-сервер не нужен.
 
-The package exposes a synchronous, non-interactive Python API independent of the CLI:
+## Минимальный пример
+
+Замените значение `reference` реальной ссылкой на произведение:
 
 ```python
 from ranobe_downloader import Downloader
 
-with Downloader(token=None) as downloader:
-    book = downloader.get_book("271947--chuanyue-zhi-xian-yu-qie-shi-de-richang")
+reference = "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ"
+with Downloader() as downloader:
+    book = downloader.get_book(reference)
     print(book.title, book.chapter_count)
     for translation in book.translations:
-        print(translation.branch_id, translation.name)
+        print(translation.branch_id, translation.name, translation.chapter_count)
 
+    branch = book.translations[0].branch_id if book.translations else None
     result = downloader.download(
-        book, format="epub", output="output/book.epub",
-        branch_id=book.translations[0].branch_id if book.translations else None,
-        resume=True, progress=lambda current, total, chapter: print(current, total, chapter),
+        book,
+        branch_id=branch,
+        format="epub",
+        output="output/book.epub",
+        limit=10,
+        resume=True,
+        progress=lambda current, total, chapter: print(current, total, chapter),
     )
     print(result)
 ```
 
-Pass `token="..."` for access to content available to your own account. The library never reads keyring or prompts for credentials; you supply them explicitly. A prepared `Book` avoids fetching the index twice. Formats: `epub`, `txt`, `html`. Pass a reference string directly to `download()` if you do not need metadata ahead of time.
+Пример выбирает первый перевод и первые 10 глав. В приложении с выбором перевода используйте `branch_id`, выбранный пользователем. `result` — путь `Path` к готовому файлу.
 
-For extensions and tests, pass `backend=BookDownloader(...)` to the facade to use separately injected providers. The facade closes only HTTP clients it creates itself; external clients remain caller-owned. A Downloader instance is synchronous and should not be used concurrently. Errors are propagated from core, network transport, and exporters, allowing callers to handle them.
+## Основные методы
 
-## Error handling
+| Метод | Результат |
+| --- | --- |
+| `get_book(reference)` | Подготовленный `Book`: название, авторы, переводы, индекс глав |
+| `book.list_chapters(branch_id)` | Главы перевода: `id`, `volume`, `number`, `name` |
+| `download(book_or_reference, ...)` | Скачивание и экспорт, возвращает `Path` |
 
-The library raises `AuthenticationError` for HTTP 401/403, `ProviderError` for other HTTP status errors and `NetworkError` for HTTP transport failures. They all inherit `DownloaderError`. Input validation still uses `ValueError` or `TypeError`; chapter, export and filesystem errors retain their original exception types. Underlying HTTP exceptions are available as `__cause__`.
+В `download` можно передать ссылку напрямую. Если метаданные уже получены, передавайте `Book`, чтобы не запрашивать индекс повторно.
+
+## Параметры скачивания
+
+- `format`: `epub`, `txt` или `html`.
+- `output`: путь файла; без него используется каталог `output/`.
+- `branch_id`: перевод; `limit`: максимум глав.
+- `chapter_start_id`/`chapter_end_id`: включительные границы по ID.
+- `chapter_from`/`chapter_to`: границы по номерам, если они однозначны.
+- `resume=True`, `cache_dir`: повторное использование проверенного кеша.
+- `progress(current, total, chapter)`: обработчик прогресса; `status(message)`: сообщения этапов.
+
+[Подробные правила диапазонов](chapter-id-selection.md).
+
+## Токен и жизненный цикл
+
+Для авторизации передайте `Downloader(token=token)`, получив секрет из защищённой конфигурации вашего приложения. Библиотека сама не читает keyring и не запрашивает ввод. Не прописывайте реальный токен в исходниках.
+
+Контекстный менеджер `with` закрывает созданный библиотекой HTTP-клиент. Внешние клиенты остаются собственностью вызывающего кода. Один экземпляр синхронный и не предназначен для одновременных вызовов из нескольких потоков.
+
+Для тестирования и расширений можно передать собственный `backend=BookDownloader(...)` с внедрёнными провайдерами.
+
+## Ошибки
+
+`AuthenticationError` соответствует HTTP 401/403, `ProviderError` — другим ошибочным HTTP-статусам, `NetworkError` — транспортным ошибкам. Все наследуют `DownloaderError`. Ошибки параметров могут быть `ValueError`/`TypeError`; ошибки файлов и экспорта сохраняют собственные типы.
 
 ```python
-from ranobe_downloader import Downloader, AuthenticationError, NetworkError
+from ranobe_downloader import Downloader, DownloaderError
 
 try:
     with Downloader() as downloader:
-        downloader.download("271947--chuanyue-zhi-xian-yu-qie-shi-de-richang", format="txt")
-except AuthenticationError:
-    print("Access denied: supply a valid token if required")
-except NetworkError:
-    print("Network temporarily unavailable")
+        downloader.download("ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ", format="txt", limit=1)
+except DownloaderError as error:
+    print(type(error).__name__, str(error))
 ```
+
+API экспериментальный; перед обновлением версии проверьте [changelog](../CHANGELOG.md).
