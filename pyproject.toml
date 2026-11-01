@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ranobe-downloader"
-version = "0.2.0a1"
-description = "RanobeLib CLI downloader with EPUB, TXT, HTML and compatibility auditing"
+version = "0.3.0"
+description = "RanobeLib downloader with CLI, Python API, Web UI, HTTP API and Telegram bot"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -27,15 +27,18 @@ classifiers = [
 
 [project.optional-dependencies]
 images = ["Pillow>=10,<13"]
+http = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+telegram = ["python-telegram-bot>=21.10,<23"]
 
 [project.scripts]
 ranobe = "main:main"
+ranobe-bot = "interfaces.telegram.ui:main"
 
 [tool.setuptools]
 py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "providers*", "exporters*", "interfaces*"]
+include = ["core*", "providers*", "exporters*", "interfaces*", "ranobe_downloader*"]
 namespaces = true
 exclude = ["tests*"]

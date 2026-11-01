@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from core.download.models import NormalizedChapter
+from exporters.atomic import atomic_destination
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -105,7 +106,7 @@ class EpubExporter:
             '<rootfiles><rootfile full-path="OEBPS/package.opf" '
             'media-type="application/oebps-package+xml"/></rootfiles></container>'
         )
-        with ZipFile(destination, "w") as archive:
+        with atomic_destination(destination) as temporary, ZipFile(temporary, "w") as archive:
             archive.writestr("mimetype", "application/epub+zip", compress_type=ZIP_STORED)
             archive.writestr("META-INF/container.xml", container, compress_type=ZIP_DEFLATED)
             archive.writestr("OEBPS/package.opf", opf, compress_type=ZIP_DEFLATED)

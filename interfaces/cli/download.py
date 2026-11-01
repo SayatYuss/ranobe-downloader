@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 
 from core.auth.storage import KeyringTokenStorage
-from core.book_downloader import BookDownloader
+from core.book_downloader import BookDownloader, _chapter_order
 from exporters.epub import EpubExporter
 from exporters.text import TxtExporter, HtmlExporter
 from interfaces.cli.translation_selector import select_translation
@@ -18,7 +18,15 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--branch', type=int, help='Translation branch ID')
     parser.add_argument('--format', choices=('epub', 'txt', 'html'), default='epub', help='Output format')
     parser.add_argument('--non-interactive', action='store_true', help='Disable interactive translation menu')
-    parser.add_argument('--limit', type=int, help='Download only first N chapters (for testing)')
+    parser.add_argument('--limit', type=int, help='Download at most N chapters after range selection')
+    parser.add_argument('--from', '--chapter-from', dest='chapter_from', metavar='NUMBER',
+                        help='First chapter number (inclusive, e.g. 13.4)')
+    parser.add_argument('--to', '--chapter-to', dest='chapter_to', metavar='NUMBER',
+                        help='Last chapter number (inclusive, e.g. 45)')
+    parser.add_argument('--start-id', type=int, help='Inclusive starting chapter ID')
+    parser.add_argument('--end-id', type=int, help='Inclusive ending chapter ID')
+    parser.add_argument('--list-chapters', action='store_true',
+                        help='List chapter numbers for the selected translation without downloading')
     parser.add_argument('--output', type=Path, help='Output path (default: output/<slug_url>_<branch>.<format>)')
     parser.add_argument('--resume', action='store_true', help='Reuse verified cached chapters')
     parser.add_argument('--cache-dir', type=Path, default=Path('output/.cache'))
@@ -70,6 +78,20 @@ def execute(args: argparse.Namespace) -> None:
 
             branch_id = args.branch if args.branch is not None else select_translation(
                 plan.translations, interactive=not args.non_interactive)
+            if args.list_chapters:
+                chapters = sorted(
+                    (chapter for chapter in plan.chapters
+                     if branch_id is None or any(
+                         branch.branch_id == branch_id for branch in chapter.branches)),
+                    key=_chapter_order,
+                )
+                if not chapters:
+                    raise ValueError('No chapters in selected translation branch')
+                for chapter in chapters:
+                    cid = getattr(chapter, "id", None)
+                    id_label = f" [ID {cid}]" if cid is not None else ""
+                    print(f'{chapter.volume}/{chapter.number}{id_label} — {chapter.name or "Без названия"}')
+                return
             slug = plan.title.slug_url
             if not re.fullmatch(r"[A-Za-z0-9_-]+", slug):
                 raise ValueError("Unsafe title slug for output filename")
@@ -77,6 +99,8 @@ def execute(args: argparse.Namespace) -> None:
             target = args.output or Path('output') / f'{slug}_{branch_label}.{format_name}'
             result = downloader.download(plan, target,
                                          branch_id=branch_id, limit=args.limit,
+                                         chapter_from=args.chapter_from, chapter_to=args.chapter_to,
+                                         chapter_start_id=args.start_id, chapter_end_id=args.end_id,
                                          progress=report, resume=args.resume,
                                          cache_dir=args.cache_dir, delay=args.delay,
                                          retries=args.retries,
