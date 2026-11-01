@@ -37,7 +37,7 @@ class Book:
         chapters = sorted((ch for ch in self._plan.chapters if branch_id is None
                            or any(b.branch_id == branch_id for b in ch.branches)),
                           key=_chapter_order)
-        return tuple({"id": ch.id, "volume": str(ch.volume), "number": str(ch.number),
+        return tuple({"id": getattr(ch, "id", None), "volume": str(ch.volume), "number": str(ch.number),
                       "name": ch.name} for ch in chapters)
 
 
