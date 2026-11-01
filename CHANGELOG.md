@@ -2,6 +2,18 @@
 
 Изменения сгруппированы по выпускам. Установка и использование: [README](README.md), все руководства: [docs](docs/README.md).
 
+## [0.4.1] — готовится к выпуску
+
+### Добавлено
+
+- Публикация Python-пакета в PyPI через GitHub Actions Trusted Publishing после успешной сборки всех интерфейсов.
+- Метаданные лицензии MIT и ссылки на репозиторий, документацию и сообщения об ошибках.
+- Google Colab Notebook для скачивания EPUB/TXT/HTML через браузер без локальной установки Python.
+
+### Улучшено
+
+- Руководства для новых пользователей и инструменты сборки Web UI/GitHub Actions.
+
 ## [0.4.0] — 2026-11-01
 
 ### Добавлено
@@ -151,3 +163,5 @@
 [0.2.0a1]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.2.0a1
 
 [0.4.0]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.4.0
+
+[0.4.1]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.4.1
