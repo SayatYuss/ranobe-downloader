@@ -2,7 +2,7 @@
 
 [Все руководства](README.md)
 
-[Открыть notebook](https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/feature/google-colab/notebooks/ranobe_downloader_colab.ipynb)
+[Открыть notebook](https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/develop/notebooks/ranobe_downloader_colab.ipynb)
 
 Код выполняется в вашей среде Google Colab; владельцу проекта не нужно запускать сервер. На телефон скачивается готовый файл, Python на телефоне не требуется. Обычно нужен Google-аккаунт. Выберите CPU: ускоритель GPU не используется.
 

@@ -39,7 +39,7 @@ Ranobe Downloader сохраняет произведения с **RanobeLib** �
 
 ## Скачать с телефона через Google Colab
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/feature/google-colab/notebooks/ranobe_downloader_colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/develop/notebooks/ranobe_downloader_colab.ipynb)
 
 Без установки Python на телефон и без собственного сервера: откройте notebook, подключите CPU-среду и выполните шаги установки, выбора книги, перевода и глав. Готовый EPUB/TXT/HTML скачивается через браузер. Среда временная; сохраните результат до отключения.
 
