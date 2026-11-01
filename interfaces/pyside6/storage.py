@@ -54,9 +54,14 @@ class Store:
     def save_settings(self):
         self._write(self.settings_file, self.settings)
 
-    def add_download(self, *, title: str, path: Path, fmt: str):
+    def save_history(self):
+        self._write(self.history_file, self.history)
+
+    def add_download(self, *, title: str, path: Path, fmt: str, reference: str = "", branch_id=None, start_id=None, end_id=None):
         record = {
             "title": title, "path": str(path), "format": fmt,
+            "reference": reference, "branch_id": branch_id,
+            "start_id": start_id, "end_id": end_id,
             "size": path.stat().st_size if path.exists() else 0,
             "date": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         }
