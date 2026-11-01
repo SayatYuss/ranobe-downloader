@@ -37,6 +37,14 @@ Ranobe Downloader сохраняет произведения с **RanobeLib** �
 
 Трей и уведомления зависят от рабочего окружения. Очередь не восстанавливается после перезапуска, а история и кеш сохраняются.
 
+## Скачать с телефона через Google Colab
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/feature/google-colab/notebooks/ranobe_downloader_colab.ipynb)
+
+Без установки Python на телефон и без собственного сервера: откройте notebook, подключите CPU-среду и выполните шаги установки, выбора книги, перевода и глав. Готовый EPUB/TXT/HTML скачивается через браузер. Среда временная; сохраните результат до отключения.
+
+[Пошаговая инструкция](docs/google-colab.md). Если репозиторий приватный, загрузите notebook вручную в Colab и выберите установку из wheel.
+
 ## Другие способы использования
 
 Все интерфейсы используют общее ядро. Запускать их одновременно не требуется.
@@ -50,7 +58,7 @@ Ranobe Downloader сохраняет произведения с **RanobeLib** �
 | HTTP API | Подключить собственный клиент к серверу | [HTTP API](docs/http-api.md) |
 | Telegram-бот | Развернуть собственного бота | [Telegram](docs/telegram-ui.md) |
 
-Для этих вариантов сначала выполните [установку из исходников](docs/installation.md). Проект требует Python 3.10+; Web UI дополнительно требует Node.js и npm. Пример CLI после установки:
+Для перечисленных ниже локальных интерфейсов сначала выполните [установку из исходников](docs/installation.md). Проект требует Python 3.10+; Web UI дополнительно требует Node.js и npm. Пример CLI после установки:
 
 ```bash
 ranobe --help
