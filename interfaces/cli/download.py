@@ -23,6 +23,8 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
                         help='First chapter number (inclusive, e.g. 13.4)')
     parser.add_argument('--to', '--chapter-to', dest='chapter_to', metavar='NUMBER',
                         help='Last chapter number (inclusive, e.g. 45)')
+    parser.add_argument('--start-id', type=int, help='Inclusive starting chapter ID')
+    parser.add_argument('--end-id', type=int, help='Inclusive ending chapter ID')
     parser.add_argument('--list-chapters', action='store_true',
                         help='List chapter numbers for the selected translation without downloading')
     parser.add_argument('--output', type=Path, help='Output path (default: output/<slug_url>_<branch>.<format>)')
@@ -86,7 +88,7 @@ def execute(args: argparse.Namespace) -> None:
                 if not chapters:
                     raise ValueError('No chapters in selected translation branch')
                 for chapter in chapters:
-                    print(f'{chapter.volume}/{chapter.number} — {chapter.name or "Без названия"}')
+                    print(f'{chapter.volume}/{chapter.number} [ID {chapter.id}] — {chapter.name or "Без названия"}')
                 return
             slug = plan.title.slug_url
             if not re.fullmatch(r"[A-Za-z0-9_-]+", slug):
@@ -96,6 +98,7 @@ def execute(args: argparse.Namespace) -> None:
             result = downloader.download(plan, target,
                                          branch_id=branch_id, limit=args.limit,
                                          chapter_from=args.chapter_from, chapter_to=args.chapter_to,
+                                         chapter_start_id=args.start_id, chapter_end_id=args.end_id,
                                          progress=report, resume=args.resume,
                                          cache_dir=args.cache_dir, delay=args.delay,
                                          retries=args.retries,
