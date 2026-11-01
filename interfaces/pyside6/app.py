@@ -85,6 +85,7 @@ class Window(QMainWindow):
         self.pending = deque()
         self.running = False
         self.threads = []
+        self.tasks = []
         self.exiting = False
         self.setWindowTitle("Ranobe Downloader")
         self.resize(790, 560)
@@ -230,7 +231,9 @@ class Window(QMainWindow):
         task.failed.connect(thread.quit)
         thread.finished.connect(task.deleteLater)
         thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda: self.tasks.remove(task) if task in self.tasks else None)
         self.threads.append(thread)
+        self.tasks.append(task)
         thread.finished.connect(lambda: self.threads.remove(thread) if thread in self.threads else None)
         if operation == perform_download:
             task.progress.connect(self.on_progress)
@@ -446,8 +449,7 @@ def main():
         return 0
     app = QApplication(sys.argv)
     app.setApplicationName("RanobeDownloader")
-    app.setQuitOnLastWindowClosed(False)
-    app.setStyle("Fusion")
+    app.setQuitOnLastWindowClosed(not QSystemTrayIcon.isSystemTrayAvailable())
     window = Window()
     window.show()
     return app.exec()
