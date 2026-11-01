@@ -1,36 +1,57 @@
-# HTTP API (experimental)
+# HTTP API
 
-Установка и локальный запуск:
+[Все руководства](README.md) · [Установка](installation.md)
+
+Локальный сервер FastAPI позволяет использовать загрузчик из Web UI или собственного HTTP-клиента. Книга создаётся на компьютере сервера, затем передаётся клиенту.
+
+## Запуск
+
+Из корня репозитория, в активном виртуальном окружении:
 
 ```bash
 python -m pip install -e '.[http]'
 python -m uvicorn interfaces.http.api:app --host 127.0.0.1 --port 8000
 ```
 
-Swagger: http://127.0.0.1:8000/docs.
+Откройте **http://127.0.0.1:8000/docs** — Swagger с формами запросов. `GET /api/health` возвращает `{"status":"ok"}`. Остановка сервера — Ctrl+C.
 
-| Метод | Endpoint | Назначение |
-| --- | --- | --- |
-| GET | `/api/health` | Состояние процесса |
-| GET | `/api/books?reference=...` | Метаданные и переводы |
-| GET | `/api/books/chapters?reference=...&branch_id=...` | Главы с ID, томом и номером |
-| POST | `/api/downloads` | Поставить задачу в очередь (202) |
-| GET | `/api/downloads` | Все задачи и состояние очереди |
-| GET | `/api/downloads/{id}` | Статус и прогресс |
-| POST | `/api/downloads/{id}/cancel` | Отмена (работающей — кооперативная) |
-| DELETE | `/api/downloads/{id}` | Удаление завершённой задачи и файла |
-| GET | `/api/downloads/{id}/file` | Результат загрузки |
+## Первая загрузка
 
-Пример:
+1. В Swagger вызовите `GET /api/books`, передав реальную ссылку RanobeLib в `reference`.
+2. Выберите `branch_id` перевода из ответа.
+3. Вызовите `POST /api/downloads` с JSON ниже. Замените ссылку; `123` — условный ID перевода, его нужно заменить.
+4. Из ответа 202 скопируйте `id` задания. Ответ 202 означает постановку в очередь, а не готовую книгу.
+5. Запрашивайте статус до `completed`, затем получите файл через `/file`.
 
-```bash
-curl -X POST http://127.0.0.1:8000/api/downloads \\
-  -H 'Content-Type: application/json' \\
-  -d '{"reference":"271947--chuanyue-zhi-xian-yu-qie-shi-de-richang","format":"epub"}'
+```json
+{
+  "reference": "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ",
+  "branch_id": 123,
+  "format": "epub",
+  "limit": 10
+}
 ```
 
-В JSON запроса поддерживаются `branch_id`, `limit`, `resume`, `chapter_start_id`, `chapter_end_id`, `chapter_from`, `chapter_to`. Диапазоны по ID и номеру нельзя смешивать.
+## Маршруты
 
-`create_app(max_workers=2, max_jobs=50, max_queue=20, retention_seconds=3600)` задаёт лимиты. Завершённые задачи и их выходные файлы автоматически удаляются **при последующих запросах к API** после истечения срока хранения; кеш глав сохраняется. Данные очереди находятся в памяти и не переживают перезапуск. См. [управление задачами](http-jobs.md).
+| Метод | Путь | Назначение |
+| --- | --- | --- |
+| GET | `/api/health` | Проверка процесса |
+| GET | `/api/books?reference=...` | Метаданные и переводы |
+| GET | `/api/books/chapters?reference=...&branch_id=...` | Главы с ID |
+| POST | `/api/downloads` | Создать задание |
+| GET | `/api/downloads` | Задания и состояние очереди |
+| GET | `/api/downloads/{id}` | Статус и прогресс |
+| POST | `/api/downloads/{id}/cancel` | Запросить отмену |
+| DELETE | `/api/downloads/{id}` | Удалить завершённое задание и результат |
+| GET | `/api/downloads/{id}/file` | Получить файл |
 
-**Безопасность:** API не содержит собственной аутентификации, пользовательских ролей и изоляции файлов. Не открывай его в интернет без защищённого шлюза с авторизацией, HTTPS и rate limiting. По умолчанию привязывай сервер к loopback.
+Запрос поддерживает `reference`, `format`, `branch_id`, `limit`, `resume` и границы по ID или номеру. [Примеры диапазонов](http-chapter-range.md), [статусы и лимиты](http-jobs.md).
+
+## Конфигурация и хранение
+
+Результаты по умолчанию находятся в `output/api`. Очередь хранится в памяти и теряется после перезапуска; готовые файлы удаляются по сроку хранения.
+
+Фабрика `create_app(max_workers=2, max_jobs=50, max_queue=20, retention_seconds=3600)` меняет лимиты. Для токена RanobeLib задайте собственную `downloader_factory` — [авторизация](authentication.md).
+
+**Встроенной авторизации клиентов и изоляции пользователей нет.** Для публичного размещения нужны внешний контроль доступа, HTTPS и ограничения запросов. Токен RanobeLib не защищает сам HTTP-сервер.

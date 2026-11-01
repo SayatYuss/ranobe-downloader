@@ -1,30 +1,39 @@
-# Telegram bot — inline interface
+# Собственный Telegram-бот
 
-The Telegram bot is optional and runs **without** FastAPI, Web UI, webhooks, or a public server.
+[Все руководства](README.md) · [Установка](installation.md)
 
-## Installation
+В репозитории находится программа бота, а не адрес готового публичного сервиса. Нужно создать своего бота и держать процесс запущенным на компьютере/сервере. Используется long polling: FastAPI, Web UI, webhook и входящий публичный порт не нужны.
 
-1. Create a bot with [@BotFather](https://t.me/BotFather) and obtain a token.
-2. Install the bot dependencies: `python -m pip install -e '.[telegram]'`
-3. Set environment variables (fish example):
+## Настройка
 
-```fish
-set -x TELEGRAM_BOT_TOKEN 'NEW_TOKEN_FROM_BOTFATHER'
-set -x TELEGRAM_ALLOWED_USER_IDS 'YOUR_NUMERIC_TELEGRAM_ID'
-# Optional RanobeLib token:
-set -x RANOBE_TOKEN 'RANOBELIB_TOKEN'
-ranobe-bot
+1. Создайте бота через [@BotFather](https://t.me/BotFather) и получите токен.
+2. Получите свой числовой Telegram user ID; это не `@username`.
+3. После [установки исходников](installation.md) выполните:
+
+```bash
+python -m pip install -e '.[telegram]'
 ```
 
-Send a RanobeLib HTTPS book URL as a **normal message** in a private chat. The bot displays book metadata, translators and an optional cover, with a Download button. Next: translation selection (skipped if one or none), chapter selection (all, first 10, last 10, or a paginated start/end choice), and format (EPUB/TXT/HTML). The downloader is invoked through the existing Python Library, reusing the prepared chapter index in memory.
+Передайте переменные через конфигурацию процесса/службы или секреты среды, затем запустите `ranobe-bot`. Файл `.env` автоматически не загружается.
 
-Large files: the standard configuration refuses to upload files greater than **45 MiB** and suggests a smaller chapter range or the CLI (`ranobe download <reference>`). Temporary generated files are deleted after handling; verified chapter caches remain.
+| Переменная | Назначение |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Обязательный токен бота от BotFather |
+| `TELEGRAM_ALLOWED_USER_IDS` | Разрешённые числовые user ID через запятую |
+| `RANOBE_TOKEN` | Необязательный токен вашей учётной записи RanobeLib |
 
-## Constraints
+Не сохраняйте настоящие токены в коде или истории команд. Без списка разрешённых ID бот принимает запросы от **любого пользователя Telegram**. Все пользователи бота используют доступ RanobeLib, настроенный у процесса.
 
-- Session and selections exist only in process memory and are lost on restart.
-- One running download per user, two concurrent downloads per process by default.
-- Keep `TELEGRAM_ALLOWED_USER_IDS` set when using a personal bot. Without it, any Telegram account can request downloads.
-- Выбор диапазона выполняется по ID глав в пределах выбранного перевода; том и номер показываются только для удобства пользователя.
-- No full-book search, inline Telegram mode, Telegram payments, or externally hosted infrastructure is required.
-- Library HTTP logs are reduced to WARNING to avoid exposing bot tokens in request URLs. Revoke any BotFather token already exposed in logs.
+## Использование
+
+Откройте личный чат, отправьте `/start`, затем HTTPS-ссылку на произведение обычным сообщением. Нажмите **Скачать**, выберите перевод, главы и формат. Бот отправит готовый файл. Групповые чаты не поддерживаются.
+
+В выборе глав отображаются том/номер, внутри используются ID. Обложка отправляется отдельно, если доступна.
+
+## Ограничения
+
+- Предел отправки в программе — **45 МиБ**. Для большой книги выберите меньше глав или используйте Desktop/CLI.
+- Одна загрузка на пользователя; две одновременно на процесс по умолчанию.
+- Сессии не переживают перезапуск. Для устаревших кнопок отправьте ссылку повторно.
+- Временный файл удаляется после обработки, даже если оказался слишком большим; кеш остаётся в `output/telegram/cache`.
+- `ranobe login` не авторизует бота: используйте `RANOBE_TOKEN`.

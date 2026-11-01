@@ -1,9 +1,32 @@
-# HTTP job management
+# Очередь HTTP API
 
-The API now supports GET /api/downloads for queue status, POST /api/downloads/{job_id}/cancel for cancellation, and DELETE /api/downloads/{job_id} for removal of completed, failed, or cancelled jobs.
+[HTTP API](http-api.md) · [Все руководства](README.md)
 
-create_app accepts max_workers=2, max_queue=20, max_jobs=50 and retention_seconds=3600. Finished records and generated output files expire on later API requests. Cached chapter data remains intact.
+После `POST /api/downloads` сохраните `id` задания: он нужен для статуса, отмены, удаления и получения файла.
 
-Cancelling queued work is immediate when the worker has not started. Cancellation of running work is cooperative and takes effect at a progress callback or after the current blocking operation.
+| Состояние | Значение |
+| --- | --- |
+| `queued` | Ожидает свободного worker |
+| `running` | Выполняется |
+| `cancelling` | Отмена запрошена, ожидается завершение текущей операции |
+| `completed` | Результат готов |
+| `failed` | Ошибка; смотрите `error` |
+| `cancelled` | Отменено |
 
-Jobs and queue are stored in memory and do not survive restarts. Keep the server bound to localhost unless protected by an authentication layer.
+`GET /api/downloads/{id}` показывает `current`, `total`, `message` и статус. `GET /api/downloads` возвращает список `jobs`, количество работающих/ожидающих и лимиты. `queue_position` относится к ожидающим заданиям.
+
+## Отмена и удаление
+
+`POST /api/downloads/{id}/cancel` отменяет ожидающее задание, если worker ещё не начал его, или запрашивает кооперативную отмену работающего. Текущий сетевой запрос может завершиться позднее.
+
+`DELETE /api/downloads/{id}` удаляет запись **и выходной файл** только для конечных состояний. Для активного задания возвращается 409; сначала отмените его и дождитесь конечного статуса.
+
+`GET /api/downloads/{id}/file` доступен после `completed`, иначе возвращает 409. Неизвестный ID даёт 404, исчезнувший готовый файл — 410.
+
+## Ограничения
+
+По умолчанию: два worker, максимум 20 ожидающих и 50 хранимых заданий, срок хранения завершённых — 3600 секунд. Переполнение ограничений может вернуть 429.
+
+Просроченные записи и результаты очищаются при последующих запросах к API, а не отдельным таймером. Кеш глав сохраняется. Скачайте результат до очистки.
+
+После перезапуска процесса очередь и статусы теряются. API не заменяет постоянное многопользовательское хранилище.

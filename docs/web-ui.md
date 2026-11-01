@@ -1,17 +1,19 @@
-# Web UI (Vue 3 + Vite)
+# Web UI
 
-The browser interface is an optional, standalone frontend for the existing FastAPI HTTP API. It does not download from RanobeLib directly.
+[Все руководства](README.md) · [Установка](installation.md)
 
-## Development
+Браузерный интерфейс на Vue обращается к HTTP API. Для работы нужны **два процесса**: Python-сервер и Vite. Если нужен запуск одним файлом, используйте [настольное приложение](desktop.md).
 
-Start FastAPI in the repository root:
+## Локальный запуск
+
+Получите исходники и создайте окружение по [инструкции](installation.md). В первом терминале из корня репозитория:
 
 ```bash
 python -m pip install -e '.[http]'
-uvicorn interfaces.http.api:app --host 127.0.0.1 --port 8000
+python -m uvicorn interfaces.http.api:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal:
+Во втором терминале из корня репозитория:
 
 ```bash
 cd web
@@ -19,20 +21,23 @@ npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. Vite proxies all `/api` requests to `http://127.0.0.1:8000`, so CORS configuration is unnecessary.
+Откройте адрес из вывода Vite, обычно **http://127.0.0.1:5173**. Запросы `/api` проксируются на порт 8000. Оба терминала должны оставаться запущенными.
 
-## Workflow
+## Скачать книгу
 
-1. Paste a RanobeLib title URL or numeric title reference and request book metadata.
-2. Choose a translation when more than one is available.
-3. Select all, first 10, last 10, or a custom inclusive range by **chapter ID** (the interface displays volumes and chapter numbers).
-4. Choose EPUB, TXT or HTML, then start the download.
-5. Follow queue position and progress in Downloads; cancel, remove or download finished results.
+1. Вставьте ссылку и запросите информацию.
+2. Выберите перевод и главы: все, первые/последние 10 или диапазон.
+3. Укажите EPUB, TXT или HTML и начните загрузку.
+4. В списке заданий дождитесь завершения и скачайте файл через браузер.
 
-## Production
+Можно следить за прогрессом, отменять и удалять задания. Удаление через API также удаляет серверный результат. Вместо обложки пока используется заглушка.
 
-`npm run build` produces static files in `web/dist`. Serve them on the same origin as FastAPI, reverse-proxying `/api/*` to the Python server. The backend currently has no built-in user authentication. **Do not expose it publicly without an authenticated reverse proxy, suitable rate limits and TLS.**
+Книга сначала создаётся на сервере. Перезагрузка страницы не останавливает его; перезапуск Python-процесса теряет очередь. Результаты удаляются по сроку хранения — [подробнее](http-jobs.md).
 
-The server keeps jobs in memory and cleans finished outputs after the configured retention period. Reloading the frontend does not delete jobs, but restarting FastAPI loses them.
+В стандартном Web UI нет формы входа RanobeLib. Для собственного токена используйте Desktop/CLI или [свою конфигурацию сервера](authentication.md).
 
-The book API currently returns no cover image; the interface uses a neutral placeholder rather than making untrusted direct image requests.
+## Сборка и размещение
+
+В каталоге `web` команда `npm run build` проверяет TypeScript и создаёт `web/dist`. Архив Web UI из Releases содержит статику, но не Python-сервер.
+
+При самостоятельном размещении фронтенд и API должны иметь один origin: `/api/*` направляется на FastAPI, остальное — на статику. API не имеет встроенной авторизации; публичное размещение требует внешней защиты доступа, HTTPS и ограничений запросов.

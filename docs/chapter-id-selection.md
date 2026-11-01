@@ -1,33 +1,55 @@
-# Chapter selection by ID
+# Как выбирать перевод и главы
 
-The core now accepts stable chapter IDs as inclusive boundaries **after filtering by translation and sorting in reading order**. Chapter IDs need not increase with chapter order.
+[Все руководства](README.md)
 
-Python API example:
+У произведения может быть несколько переводов. Сначала выбирается перевод (`branch_id`), затем из его глав — нужный диапазон.
+
+## ID и номер — разные значения
+
+Номер главы предназначен для читателя: например, том 2, глава 10. Номер может повторяться в другом томе. **ID главы** — идентификатор записи, используемый для точного выбора.
+
+Числовое значение ID не задаёт порядок чтения. Диапазон строится по порядку глав после фильтрации перевода, а не по условию «ID от меньшего к большему».
+
+В Desktop, Web UI и Telegram видны том и номер; соответствующий ID используется внутри интерфейса. В CLI и Python его можно получить из списка глав.
+
+## Правила диапазона
+
+- Обе границы включаются.
+- Без начальной границы отсчёт идёт с начала перевода; без конечной — до конца.
+- Без обеих границ выбирается весь перевод.
+- Границы должны существовать в выбранном переводе; начало должно предшествовать концу или совпадать с ним.
+- `limit` ограничивает число глав **после** выбора диапазона.
+- ID перевода и ID главы не взаимозаменяемы.
+
+## Python
 
 ```python
 from ranobe_downloader import Downloader
 
+reference = "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ"
 with Downloader() as downloader:
-    book = downloader.get_book("271947--example")
-    for chapter in book.list_chapters(branch_id=123):
+    book = downloader.get_book(reference)
+    branch = book.translations[0].branch_id if book.translations else None
+    chapters = book.list_chapters(branch)
+    for chapter in chapters:
         print(chapter["id"], chapter["volume"], chapter["number"], chapter["name"])
-    downloader.download(
-        book, branch_id=123, chapter_start_id=1001, chapter_end_id=1005,
-        format="epub", resume=True,
-    )
+    if chapters:
+        selected = chapters[:10]
+        path = downloader.download(
+            book, branch_id=branch,
+            chapter_start_id=selected[0]["id"],
+            chapter_end_id=selected[-1]["id"],
+            output="output/first-chapters.epub", resume=True,
+        )
+        print(path)
 ```
 
-CLI:
+Здесь для краткости выбран первый перевод. В собственном интерфейсе предложите пользователю выбрать перевод из `book.translations`.
 
-```bash
-ranobe download "271947--example" --branch 123 --list-chapters
-ranobe download "271947--example" --branch 123 --start-id 1001 --end-id 1005
-```
+## Выбор по номерам
 
-Web API: `GET /api/books/chapters` now includes `id`; `POST /api/downloads` accepts `chapter_start_id` and `chapter_end_id`.
+Параметры `chapter_from`/`chapter_to` библиотеки и `--from`/`--to` CLI поддерживают номера вроде `13.4`. Они сравниваются как точные десятичные значения. Если номер границы отсутствует или повторяется в нескольких томах, выбор отклоняется; используйте ID.
 
-Telegram: the chapter-picker buttons use the IDs internally, while showing volume and chapter numbers.
+Не смешивайте границы по номерам с `chapter_start_id`/`chapter_end_id` в одном запросе.
 
-Do not combine ID selection with legacy `chapter_from` / `chapter_to` number selection. Boundaries must exist in the chosen translation; a reversed pair fails before downloading chapters. Both ID boundaries are optional. `limit` applies to the resulting span.
-
-The existing `chapter_from` and `chapter_to` number parameters remain for backward compatibility.
+[CLI](cli-chapter-range.md) · [Python API](python-api.md) · [HTTP-примеры](http-chapter-range.md)
