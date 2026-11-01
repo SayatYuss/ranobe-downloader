@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ranobe-downloader"
-version = "0.3.1"
-description = "RanobeLib downloader with CLI, Python API, Web UI, HTTP API and Telegram bot"
+version = "0.4.0"
+description = "RanobeLib downloader with PySide6 desktop, CLI, Python API, Web UI, HTTP API and Telegram bot"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -29,10 +29,12 @@ classifiers = [
 images = ["Pillow>=10,<13"]
 http = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
 telegram = ["python-telegram-bot>=21.10,<23"]
+desktop = ["PySide6>=6.7,<7"]
 
 [project.scripts]
 ranobe = "main:main"
 ranobe-bot = "interfaces.telegram.ui:main"
+ranobe-desktop = "interfaces.pyside6.app:main"
 
 [tool.setuptools]
 py-modules = ["main"]
