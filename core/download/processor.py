@@ -56,4 +56,5 @@ class ContentProcessor:
         return NormalizedChapter(
             label, chapter_to_xhtml(label, content, images=paths, html_images=html_paths),
             images=tuple(media.values()),
+            image_pages=bool(data.get("image_pages", False)),
         )
