@@ -71,6 +71,7 @@ class MangaLibProviderTests(unittest.TestCase):
         content = ChapterContentProvider(client).get_chapter(
             slug, volume="1", number="1", branch_id=7
         )
+        self.assertTrue(content.data["image_pages"])
         self.assertEqual(client.calls[0][1], {
             "volume": "1", "number": "1", "branch_id": 7
         })
