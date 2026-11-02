@@ -11,7 +11,7 @@ PAGES_BASE_URL = "https://img3.cdnlibs.org"
 def _page_attachment(page: dict) -> dict:
     path = str(page.get("url") or "")
     if path.startswith("//"):
-        path = "https:" + path
+        path = PAGES_BASE_URL + path[1:]
     elif path.startswith("/"):
         path = PAGES_BASE_URL + path
     parsed = urlsplit(path)
