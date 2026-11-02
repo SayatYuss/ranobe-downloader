@@ -9,6 +9,32 @@ class ImageOptimizationTests(unittest.TestCase):
         source = b"RIFFxxxxWEBP"
         self.assertEqual(optimize_image(source, "image/webp"), (source, "image/webp", "webp"))
 
+    def test_jpeg_quality_recompression(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Optional Pillow not installed")
+        import random
+        source = Image.frombytes("RGB", (300, 300), random.Random(1234).randbytes(270000))
+        buf = BytesIO()
+        source.save(buf, format="JPEG", quality=98)
+        data, media, ext = optimize_image(buf.getvalue(), "image/jpeg", quality=55)
+        self.assertEqual((media, ext), ("image/jpeg", "jpg"))
+        self.assertLess(len(data), len(buf.getvalue()))
+
+    def test_webp_quality_recompression(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Optional Pillow not installed")
+        import random
+        source = Image.frombytes("RGB", (300, 300), random.Random(4321).randbytes(270000))
+        buf = BytesIO()
+        source.save(buf, format="WEBP", quality=98)
+        data, media, ext = optimize_image(buf.getvalue(), "image/webp", quality=45)
+        self.assertEqual((media, ext), ("image/webp", "webp"))
+        self.assertLess(len(data), len(buf.getvalue()))
+
     def test_invalid_options(self):
         with self.assertRaises(ValueError):
             optimize_image(b"", "image/png", quality=0)
