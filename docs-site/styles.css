@@ -42,3 +42,14 @@ h2{font-size:22px;letter-spacing:-.6px;font-weight:650;margin:0 0 18px}
 footer{max-width:760px;width:calc(100% - 40px);margin:0 auto;display:flex;justify-content:space-between;gap:15px;padding:26px 0 34px;font-size:11px;color:var(--muted)}
 footer a{color:var(--text)}
 @media(max-width:620px){.site-header{height:auto;min-height:68px;align-items:flex-start;padding:17px 0;gap:14px}.brand{white-space:nowrap}nav{gap:10px;flex-wrap:wrap;justify-content:flex-end}nav a:not(.github-link){display:none}main{width:calc(100% - 36px)}.intro{padding:66px 0 55px}h1{letter-spacing:-1.8px}.intro-text{font-size:14px}.content-section{padding:38px 0}.formats{grid-template-columns:1fr;gap:18px}.formats article{padding-top:15px}footer{width:calc(100% - 36px);flex-direction:column}}
+
+.donation-list{display:grid;gap:12px;margin-top:22px}
+.donation-item{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
+.donation-item h3{font-size:14px;margin:0 0 9px;font-weight:650}
+.donation-item h3 span{font-size:10px;letter-spacing:.7px;color:var(--accent);margin-left:5px}
+.donation-item code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.copy-address{flex:none;font:inherit;font-size:11px;font-weight:600;padding:9px 11px;border:1px solid #cbd8cf;border-radius:6px;background:transparent;color:var(--accent);cursor:pointer}
+.copy-address:hover{background:#e9eee9}
+.content-section .donation-warning{font-size:12px;margin-top:18px}
+.copy-status{min-height:16px;font-size:12px;color:var(--accent);margin:8px 0 0}
+@media(max-width:620px){.donation-item{align-items:flex-start;flex-direction:column}.copy-address{width:100%}.donation-item code{font-size:10px}}
