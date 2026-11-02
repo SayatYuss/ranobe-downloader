@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sayatyuss.github.io/ranobe-downloader/sitemap.xml
