@@ -11,10 +11,13 @@ from exporters.epub import EpubExporter
 from exporters.text import TxtExporter, HtmlExporter
 from interfaces.cli.translation_selector import select_translation
 from providers.libsocial.client import LibSocialClient
+from providers.mangalib.client import MangaLibClient
+from providers.mangalib.adapter import MangaLibAdapter
+from providers.mangalib.references import is_mangalib_reference
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('reference', help='Title ID, ID--slug, or RanobeLib URL')
+    parser.add_argument('reference', help='Title ID, ID--slug, or RanobeLib / MangaLib URL')
     parser.add_argument('--branch', type=int, help='Translation branch ID')
     parser.add_argument('--format', choices=('epub', 'txt', 'html'), default='epub', help='Output format')
     parser.add_argument('--non-interactive', action='store_true', help='Disable interactive translation menu')
@@ -61,14 +64,26 @@ def _print_summary(stats) -> None:
 
 def execute(args: argparse.Namespace) -> None:
     try:
-        print('Connecting to RanobeLib...', flush=True)
-        with LibSocialClient(KeyringTokenStorage().load()) as client:
+        mangalib = is_mangalib_reference(args.reference)
+        provider_name = "MangaLib" if mangalib else "RanobeLib"
+        print(f'Connecting to {provider_name}...', flush=True)
+        client_type = MangaLibClient if mangalib else LibSocialClient
+        with client_type(KeyringTokenStorage().load()) as client:
             def report(current, total, chapter):
                 print(f'[{current}/{total}] {current / total:.0%}  {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
             format_name = args.format
             exporter = {'epub': EpubExporter, 'txt': TxtExporter, 'html': HtmlExporter}[format_name]()
-            downloader = BookDownloader(client, exporter=exporter)
+            if mangalib:
+                adapter = MangaLibAdapter(client)
+                downloader = BookDownloader(
+                    titles=adapter.titles, chapters=adapter.chapters,
+                    contents=adapter.contents, media=adapter,
+                    cover_downloader=adapter.download_cover,
+                    exporter=exporter, provider_name="mangalib",
+                )
+            else:
+                downloader = BookDownloader(client, exporter=exporter)
             plan = downloader.prepare(args.reference)
             print(f'Title: {plan.title.title}', flush=True)
             def report_status(message):
