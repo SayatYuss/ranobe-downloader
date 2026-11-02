@@ -32,7 +32,7 @@ def _chapter_order(chapter):
 class BookDownloader:
     def __init__(self, client=None, exporter=None, *,
                  titles=None, chapters=None, contents=None,
-                 media=None, cover_downloader=None):
+                 media=None, cover_downloader=None, provider_name='ranobelib'):
         """Inject any compatible content sources, or use the RanobeLib defaults.
 
         Existing BookDownloader(client, exporter) calls remain supported.
@@ -54,6 +54,7 @@ class BookDownloader:
         self.contents = contents
         self.media = media
         self.cover_downloader = cover_downloader
+        self.provider_name = provider_name
         self.exporter = exporter if exporter is not None else EpubExporter()
 
     def prepare(self, reference: str, *,
@@ -177,7 +178,7 @@ class BookDownloader:
 
         result = self.exporter.export(
             output, title=title.title, authors=title.authors, chapters=rendered,
-            description=title.description, identifier=f'ranobelib:{title.id}',
+            description=title.description, identifier=f'{self.provider_name}:{title.id}',
             cover=cover, cover_media_type=cover_type,
         )
         if statistics is not None:
