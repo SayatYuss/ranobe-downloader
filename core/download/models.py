@@ -7,3 +7,4 @@ class NormalizedChapter:
     title: str
     xhtml: str
     images: tuple[tuple[str, bytes, str], ...] = ()
+    image_pages: bool = False
