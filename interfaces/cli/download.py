@@ -35,11 +35,11 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--cache-dir', type=Path, default=Path('output/.cache'))
     parser.add_argument('--delay', type=float, default=1.0, help='Seconds between downloads')
     parser.add_argument('--image-mode', choices=('original', 'optimized'), default='original',
-                        help='original: embed source files (default); optimized: convert near-opaque PNG to smaller JPEG (requires Pillow)')
+                        help='original: embed source files (default); optimized: recompress supported formats (requires Pillow)')
     parser.add_argument('--image-quality', type=int, metavar='1-100', default=None,
                         help='Enable image compression at this quality (default when enabled: 85)')
     parser.add_argument('--image-max-width', type=int, default=1600,
-                        help='Max width when converting PNGs, in pixels (default: 1600)')
+                        help='Maximum width when optimizing images, in pixels (default: 1600)')
     parser.add_argument('--verbose', action='store_true', help='Show per-image download details')
     parser.add_argument('--retries', type=int, default=5, help='Maximum attempts per chapter')
 
