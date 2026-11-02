@@ -53,6 +53,7 @@ class ChapterContentProvider:
         attachments = [_page_attachment(page) for page in pages]
         data = dict(data)
         data["attachments"] = attachments
+        data["image_pages"] = True
         data["content"] = {"type": "doc", "content": [
             {"type": "image", "attrs": {"images": [{"image": item["name"]}]}}
             for item in attachments
