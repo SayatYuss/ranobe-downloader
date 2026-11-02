@@ -12,7 +12,7 @@
 from ranobe_downloader import Downloader
 
 reference = "ССЫЛКА_НА_ПРОИЗВЕДЕНИЕ"
-with Downloader() as downloader:
+with Downloader(provider="ranobelib") as downloader:
     book = downloader.get_book(reference)
     print(book.title, book.chapter_count)
     for translation in book.translations:
@@ -57,7 +57,7 @@ with Downloader() as downloader:
 
 ## Токен и жизненный цикл
 
-Для авторизации передайте `Downloader(token=token)`, получив секрет из защищённой конфигурации вашего приложения. Библиотека сама не читает keyring и не запрашивает ввод. Не прописывайте реальный токен в исходниках.
+Для MangaLib укажите `Downloader(provider="mangalib", token=token)`; для RanobeLib используется `provider="ranobelib"` (по умолчанию). Для авторизации передайте `token=token`, получив секрет из защищённой конфигурации вашего приложения. Библиотека сама не читает keyring и не запрашивает ввод. Не прописывайте реальный токен в исходниках.
 
 Контекстный менеджер `with` закрывает созданный библиотекой HTTP-клиент. Внешние клиенты остаются собственностью вызывающего кода. Один экземпляр синхронный и не предназначен для одновременных вызовов из нескольких потоков.
 
@@ -78,3 +78,5 @@ except DownloaderError as error:
 ```
 
 API экспериментальный; перед обновлением версии проверьте [changelog](../CHANGELOG.md).
+
+Для примера MangaLib и особенности его API см. [руководство MangaLib](mangalib.md).
