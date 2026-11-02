@@ -6,8 +6,15 @@ from core.download.image_optimization import optimize_image
 
 class ImageOptimizationTests(unittest.TestCase):
     def test_preserves_existing_webp(self):
-        source = b"RIFFxxxxWEBP"
-        self.assertEqual(optimize_image(source, "image/webp"), (source, "image/webp", "webp"))
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Optional Pillow not installed")
+        source = Image.new("RGBA", (2, 2), (10, 20, 30, 100))
+        buf = BytesIO()
+        source.save(buf, format="WEBP")
+        payload = buf.getvalue()
+        self.assertEqual(optimize_image(payload, "image/webp"), (payload, "image/webp", "webp"))
 
     def test_jpeg_quality_recompression(self):
         try:
