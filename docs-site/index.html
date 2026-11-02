@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f7f5">
+<meta name="description" content="Ranobe Downloader is an open-source tool for saving novels from RanobeLib as EPUB, TXT, or HTML for offline reading.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://sayatyuss.github.io/ranobe-downloader/">
+<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ranobe Downloader">
+<meta property="og:description" content="Save RanobeLib novels for offline reading. Open source, simple, and available through desktop and CLI.">
+<meta property="og:url" content="https://sayatyuss.github.io/ranobe-downloader/">
+<meta property="og:image" content="https://sayatyuss.github.io/ranobe-downloader/assets/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<title>Ranobe Downloader — Save novels for offline reading</title>
+<link rel="stylesheet" href="./styles.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Ranobe Downloader","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows, macOS, Linux","description":"Open-source tool for downloading RanobeLib novels as EPUB, TXT, or HTML for offline reading.","url":"https://sayatyuss.github.io/ranobe-downloader/","codeRepository":"https://github.com/SayatYuss/ranobe-downloader","license":"https://opensource.org/licenses/MIT"}</script>
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="./"><span class="brand-mark">R</span> Ranobe Downloader</a>
+  <nav><a href="#about" data-t="nav_about">About</a><a href="#usage" data-t="nav_usage">How to use</a><a href="#formats" data-t="nav_formats">Formats</a><button id="lang-switch" type="button" aria-label="Switch language">RU</button><a class="github-link" href="https://github.com/SayatYuss/ranobe-downloader">GitHub ↗</a></nav>
+</header>
+<main>
+  <section class="intro">
+    <p class="eyebrow" data-t="eyebrow">OPEN-SOURCE PROJECT</p>
+    <h1 data-t="hero_title">Save your novels.<br>Read them offline.</h1>
+    <p class="intro-text" data-t="hero_text">Ranobe Downloader is a tool for downloading novels from RanobeLib and saving them as files for reading on your own device.</p>
+    <div class="intro-actions"><a class="button" href="https://github.com/SayatYuss/ranobe-downloader/releases" data-t="download">Download app ↗</a><a class="button button-secondary" href="https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/feature/github-pages-site/notebooks/ranobe_downloader_colab.ipynb" data-t="launch_colab">Launch in Colab ↗</a><a class="text-link" href="https://github.com/SayatYuss/ranobe-downloader" data-t="source">View source code</a></div>
+  </section>
+  <section class="content-section" id="about">
+    <h2 data-t="about_title">What is it?</h2>
+    <p data-t="about_text">The downloader takes chapters available on RanobeLib and combines them into a book. You can save a complete novel or select only the chapters you need. It is useful for offline reading, keeping a personal copy, or transferring a book to an e-reader.</p>
+    <p class="note" data-t="note">Use it only for content you have permission to save and respect the source site's rules.</p>
+  </section>
+  <section class="content-section" id="usage">
+    <h2 data-t="usage_title">How to use</h2>
+    <ol class="steps">
+      <li><span class="step-number">01</span><div><h3 data-t="step1_title">Choose an interface</h3><p data-t="step1_text">Install the desktop app or use the command line. Links to setup instructions are in the repository.</p></div></li>
+      <li><span class="step-number">02</span><div><h3 data-t="step2_title">Provide a RanobeLib link</h3><p data-t="step2_text">Copy the novel URL and paste it into the app or pass it to the CLI command.</p></div></li>
+      <li><span class="step-number">03</span><div><h3 data-t="step3_title">Select chapters and format</h3><p data-t="step3_text">Choose all chapters or a range, select an export format, and start downloading.</p></div></li>
+      <li><span class="step-number">04</span><div><h3 data-t="step4_title">Read offline</h3><p data-t="step4_text">Open the resulting file in your reading app or transfer it to your e-reader.</p></div></li>
+    </ol>
+  </section>
+  <section class="content-section" id="formats">
+    <h2 data-t="formats_title">Export formats</h2>
+    <div class="formats">
+      <article><h3>EPUB</h3><p data-t="epub_text">Best for e-readers and reading apps. Supports a table of contents and images.</p></article>
+      <article><h3>TXT</h3><p data-t="txt_text">Plain text, lightweight and easy to process.</p></article>
+      <article><h3>HTML</h3><p data-t="html_text">Read in a web browser, with optional images.</p></article>
+    </div>
+  </section>
+  <section class="content-section interfaces">
+    <h2 data-t="interfaces_title">Available interfaces</h2>
+    <p data-t="interfaces_text">Choose the way that fits your workflow.</p>
+    <div class="links-list">
+      <a href="https://github.com/SayatYuss/ranobe-downloader/releases"><span><b data-t="desktop">Desktop app</b><small data-t="desktop_desc">Graphical interface</small></span><span>↗</span></a>
+      <a href="https://github.com/SayatYuss/ranobe-downloader/blob/develop/docs/cli-chapter-range.md"><span><b>CLI</b><small data-t="cli_desc">Terminal and automation</small></span><span>↗</span></a>
+      <a href="https://github.com/SayatYuss/ranobe-downloader/blob/develop/docs/web-ui.md"><span><b>Web UI / HTTP API</b><small data-t="web_desc">Browser interface and local API</small></span><span>↗</span></a>
+      <a href="https://github.com/SayatYuss/ranobe-downloader/blob/develop/docs/telegram-ui.md"><span><b data-t="telegram">Telegram bot</b><small data-t="telegram_desc">Bot interface setup</small></span><span>↗</span></a>
+      <a href="https://github.com/SayatYuss/ranobe-downloader/blob/develop/docs/python-api.md"><span><b>Python API</b><small data-t="python_desc">Use it in your own code</small></span><span>↗</span></a>
+      <a href="https://colab.research.google.com/github/SayatYuss/ranobe-downloader/blob/feature/github-pages-site/notebooks/ranobe_downloader_colab.ipynb"><span><b>Google Colab</b><small data-t="colab_desc">Run in a cloud notebook</small></span><span>↗</span></a>
+    </div>
+  </section>
+  <section class="content-section donation-section" id="support">
+    <h2 data-t="support_title">Support the project</h2>
+    <p data-t="support_text">If Ranobe Downloader is useful to you, you can support its development with a USDT transfer.</p>
+    <div class="donation-list">
+      <article class="donation-item">
+        <div><h3>USDT <span>TON</span></h3><code>UQDVcRK6LmIUiFaIIN9CiPTVZ3C5jbsz2lT5FJ6kK7iMFLBS</code></div>
+        <button class="copy-address" type="button" data-address="UQDVcRK6LmIUiFaIIN9CiPTVZ3C5jbsz2lT5FJ6kK7iMFLBS" data-t="copy">Copy address</button>
+      </article>
+      <article class="donation-item">
+        <div><h3>USDT <span>TRC20</span></h3><code>TEkm8k6kcK2JvSm2hCLsdhky2UNsGKcL9H</code></div>
+        <button class="copy-address" type="button" data-address="TEkm8k6kcK2JvSm2hCLsdhky2UNsGKcL9H" data-t="copy">Copy address</button>
+      </article>
+    </div>
+    <p class="donation-warning" data-t="support_warning">Important: select the exact network shown above when sending USDT. Transfers sent through a different network may be lost.</p>
+    <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+<footer><span>Ranobe Downloader · MIT License</span><a href="https://github.com/SayatYuss/ranobe-downloader" data-t="footer_link">GitHub repository ↗</a></footer>
+<script>
+const translations={
+en:{nav_about:"About",nav_usage:"How to use",nav_formats:"Formats",eyebrow:"OPEN-SOURCE PROJECT",hero_title:"Save your novels.<br>Read them offline.",hero_text:"Ranobe Downloader is a tool for downloading novels from RanobeLib and saving them as files for reading on your own device.",download:"Download app ↗",launch_colab:"Launch in Colab ↗",source:"View source code",about_title:"What is it?",about_text:"The downloader takes chapters available on RanobeLib and combines them into a book. You can save a complete novel or select only the chapters you need. It is useful for offline reading, keeping a personal copy, or transferring a book to an e-reader.",note:"Use it only for content you have permission to save and respect the source site's rules.",usage_title:"How to use",step1_title:"Choose an interface",step1_text:"Install the desktop app or use the command line. Links to setup instructions are in the repository.",step2_title:"Provide a RanobeLib link",step2_text:"Copy the novel URL and paste it into the app or pass it to the CLI command.",step3_title:"Select chapters and format",step3_text:"Choose all chapters or a range, select an export format, and start downloading.",step4_title:"Read offline",step4_text:"Open the resulting file in your reading app or transfer it to your e-reader.",formats_title:"Export formats",epub_text:"Best for e-readers and reading apps. Supports a table of contents and images.",txt_text:"Plain text, lightweight and easy to process.",html_text:"Read in a web browser, with optional images.",interfaces_title:"Available interfaces",interfaces_text:"Choose the way that fits your workflow.",desktop:"Desktop app",desktop_desc:"Graphical interface",cli_desc:"Terminal and automation",web_desc:"Browser interface and local API",telegram:"Telegram bot",telegram_desc:"Bot interface setup",python_desc:"Use it in your own code",colab_desc:"Run in a cloud notebook",footer_link:"GitHub repository ↗",support_title:"Support the project",support_text:"If Ranobe Downloader is useful to you, you can support its development with a USDT transfer.",copy:"Copy address",copied:"Address copied",copy_error:"Could not copy automatically. Select and copy the address manually.",support_warning:"Important: select the exact network shown above when sending USDT. Transfers sent through a different network may be lost.",language:"RU",title:"Ranobe Downloader — Save novels for offline reading",description:"Open-source tool for downloading novels from RanobeLib as EPUB, TXT, or HTML."},
+ru:{nav_about:"О проекте",nav_usage:"Как пользоваться",nav_formats:"Форматы",eyebrow:"OPEN-SOURCE ПРОЕКТ",hero_title:"Сохраняй ранобэ.<br>Читай офлайн.",hero_text:"Ranobe Downloader — инструмент для скачивания ранобэ с RanobeLib и сохранения в файлы для чтения на своём устройстве.",download:"Скачать приложение ↗",launch_colab:"Запустить в облаке ↗",source:"Исходный код",about_title:"Что это?",about_text:"Загрузчик собирает доступные на RanobeLib главы в книгу. Можно сохранить всё произведение или только нужные главы. Это удобно для чтения без интернета, личной копии или переноса книги на электронную читалку.",note:"Сохраняй только материалы, на которые у тебя есть право, и соблюдай правила исходного сайта.",usage_title:"Как пользоваться",step1_title:"Выбери интерфейс",step1_text:"Установи приложение для ПК или используй командную строку. Инструкции по настройке находятся в репозитории.",step2_title:"Укажи ссылку RanobeLib",step2_text:"Скопируй URL ранобэ и вставь его в приложение или передай CLI-команде.",step3_title:"Выбери главы и формат",step3_text:"Укажи все главы или диапазон, выбери формат экспорта и запусти скачивание.",step4_title:"Читай офлайн",step4_text:"Открой полученный файл в приложении-читалке или перенеси его на электронную книгу.",formats_title:"Форматы экспорта",epub_text:"Оптимален для электронных книг и приложений-читалок. Поддерживает оглавление и изображения.",txt_text:"Обычный текст — лёгкий формат, удобный для обработки.",html_text:"Для чтения в браузере, с возможностью включить изображения.",interfaces_title:"Доступные интерфейсы",interfaces_text:"Выбери подходящий способ работы.",desktop:"Приложение для ПК",desktop_desc:"Графический интерфейс",cli_desc:"Терминал и автоматизация",web_desc:"Браузерный интерфейс и локальный API",telegram:"Telegram-бот",telegram_desc:"Настройка интерфейса бота",python_desc:"Использование в собственном коде",colab_desc:"Запуск в облачном ноутбуке",footer_link:"Репозиторий GitHub ↗",support_title:"Поддержать проект",support_text:"Если Ranobe Downloader оказался полезен, ты можешь поддержать его развитие переводом USDT.",copy:"Скопировать адрес",copied:"Адрес скопирован",copy_error:"Не удалось скопировать автоматически. Скопируй адрес вручную.",support_warning:"Важно: при переводе USDT выбери именно указанную сеть. Перевод через другую сеть может быть потерян.",language:"EN",title:"Ranobe Downloader — сохраняй ранобэ для офлайн-чтения",description:"Open-source инструмент для скачивания ранобэ с RanobeLib в EPUB, TXT или HTML."}
+};
+function setLanguage(lang){const d=translations[lang];document.documentElement.lang=lang;document.title=d.title;document.querySelector('meta[name="description"]').content=d.description;document.querySelectorAll("[data-t]").forEach(el=>el.innerHTML=d[el.dataset.t]);document.getElementById("lang-switch").textContent=d.language;}
+document.getElementById("lang-switch").addEventListener("click",()=>setLanguage(document.documentElement.lang==="en"?"ru":"en"));setLanguage("en");
+document.querySelectorAll(".copy-address").forEach(button=>button.addEventListener("click",async()=>{
+  const status=document.getElementById("copy-status");
+  try{await navigator.clipboard.writeText(button.dataset.address);status.textContent=translations[document.documentElement.lang].copied;}
+  catch{status.textContent=translations[document.documentElement.lang].copy_error;}
+}));
+</script>
+</body>
+</html>
