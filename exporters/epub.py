@@ -14,6 +14,24 @@ from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 # Backward-compatible public name for callers using the original EPUB model.
 EpubChapter = NormalizedChapter
 
+IMAGE_PAGE_CSS = """
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+body > h1 { display: none; }
+img { display: block; width: 100vw; height: 100vh; max-width: 100%; max-height: 100vh; object-fit: contain; break-after: page; page-break-after: always; }
+"""
+
+
+def _chapter_xhtml(chapter: EpubChapter) -> str:
+    if not chapter.image_pages:
+        return chapter.xhtml
+    marker = "</head>"
+    if marker not in chapter.xhtml:
+        raise ValueError("Image-page XHTML is missing its head element")
+    rendered = chapter.xhtml.replace(marker, f'<style type="text/css">{IMAGE_PAGE_CSS}</style>' + marker, 1)
+    ElementTree.fromstring(rendered)
+    return rendered
+
 
 class EpubExporter:
     def export(
@@ -118,7 +136,7 @@ class EpubExporter:
             for index, chapter in enumerate(chapters, 1):
                 archive.writestr(
                     f"OEBPS/chapter-{index:04}.xhtml",
-                    chapter.xhtml.encode("utf-8"),
+                    _chapter_xhtml(chapter).encode("utf-8"),
                     compress_type=ZIP_DEFLATED,
                 )
         return destination
