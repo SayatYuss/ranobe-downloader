@@ -49,6 +49,27 @@ class EpubExporterTests(unittest.TestCase):
                 self.assertIn("<dc:creator>Writer</dc:creator>", package)
                 self.assertIn("Description &amp; details", package)
 
+    def test_manga_image_pages_get_full_page_styles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "manga.epub"
+            xhtml = chapter_to_xhtml("Chapter 1", {"type": "doc", "content": [
+                {"type": "image", "attrs": {"images": [{"image": "1"}]}},
+                {"type": "image", "attrs": {"images": [{"image": "2"}]}},
+            ]}, images={"1": "images/1.jpg", "2": "images/2.jpg"})
+            chapter = EpubChapter(
+                "Chapter 1", xhtml,
+                (("images/1.jpg", b"jpeg-one", "image/jpeg"),
+                 ("images/2.jpg", b"jpeg-two", "image/jpeg")),
+                image_pages=True,
+            )
+            EpubExporter().export(target, title="Manga", chapters=[chapter])
+            with ZipFile(target) as archive:
+                page = archive.read("OEBPS/chapter-0001.xhtml").decode()
+                self.assertIn("object-fit: contain", page)
+                self.assertIn("page-break-after: always", page)
+                self.assertIn("width: 100vw", page)
+                self.assertEqual(page.count("<img "), 2)
+
     def test_reject_invalid_cover_type(self):
         xhtml = chapter_to_xhtml("Chapter", {"type": "doc", "content": []})
         with self.assertRaises(ValueError):
