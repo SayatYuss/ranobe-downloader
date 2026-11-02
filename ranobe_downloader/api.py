@@ -15,6 +15,8 @@ from core.download.statistics import DownloadStatistics
 from exporters.epub import EpubExporter
 from exporters.text import HtmlExporter, TxtExporter
 from providers.libsocial.client import LibSocialClient
+from providers.mangalib.client import MangaLibClient
+from providers.mangalib.adapter import MangaLibAdapter
 
 ExportFormat = Literal["epub", "txt", "html"]
 _EXPORTERS = {"epub": EpubExporter, "txt": TxtExporter, "html": HtmlExporter}
@@ -49,14 +51,30 @@ class Downloader:
     """
 
     def __init__(self, token: str | None = None, *, client=None,
-                 backend: BookDownloader | None = None):
+                 backend: BookDownloader | None = None, provider: Literal["ranobelib", "mangalib"] = "ranobelib"):
+        if provider not in ("ranobelib", "mangalib"):
+            raise ValueError("provider must be ranobelib or mangalib")
         if backend is not None and (token is not None or client is not None):
             raise ValueError("backend cannot be combined with token or client")
         if client is not None and token is not None:
             raise ValueError("Pass either client or token")
+        self._provider = provider
         self._owns_client = backend is None and client is None
-        self._client = (LibSocialClient(token) if self._owns_client else client)
-        self._backend = backend or BookDownloader(self._client)
+        client_type = MangaLibClient if provider == "mangalib" else LibSocialClient
+        self._client = (client_type(token) if self._owns_client else client)
+        if backend is not None:
+            self._backend = backend
+        else:
+            adapter = MangaLibAdapter(self._client) if provider == "mangalib" else None
+            if adapter is None:
+                self._backend = BookDownloader(self._client)
+            else:
+                self._backend = BookDownloader(
+                    titles=adapter.titles, chapters=adapter.chapters,
+                    contents=adapter.contents, media=adapter,
+                    cover_downloader=adapter.download_cover,
+                    provider_name="mangalib",
+                )
         self._closed = False
 
     def _ensure_open(self):
