@@ -7,6 +7,7 @@ import httpx
 
 from core.auth.storage import KeyringTokenStorage
 from core.book_downloader import BookDownloader, _chapter_order
+from core.settings import DownloaderSettings
 from exporters.epub import EpubExporter
 from exporters.text import TxtExporter, HtmlExporter
 from interfaces.cli.translation_selector import select_translation
