@@ -17,7 +17,7 @@ from providers.libsocial.client import LibSocialClient
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('reference', help='Title ID, ID--slug, or RanobeLib URL')
     parser.add_argument('--branch', type=int, help='Translation branch ID')
-    parser.add_argument('--format', choices=('epub', 'txt', 'html'), default='epub', help='Output format')
+    parser.add_argument('--format', choices=('epub', 'txt', 'html'), default=None, help='Output format')
     parser.add_argument('--non-interactive', action='store_true', help='Disable interactive translation menu')
     parser.add_argument('--limit', type=int, help='Download at most N chapters after range selection')
     parser.add_argument('--from', '--chapter-from', dest='chapter_from', metavar='NUMBER',
@@ -30,16 +30,16 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
                         help='List chapter numbers for the selected translation without downloading')
     parser.add_argument('--output', type=Path, help='Output path (default: output/<slug_url>_<branch>.<format>)')
     parser.add_argument('--resume', action='store_true', help='Reuse verified cached chapters')
-    parser.add_argument('--cache-dir', type=Path, default=Path('output/.cache'))
-    parser.add_argument('--delay', type=float, default=1.0, help='Seconds between downloads')
-    parser.add_argument('--image-mode', choices=('original', 'optimized'), default='original',
+    parser.add_argument('--cache-dir', type=Path, default=None)
+    parser.add_argument('--delay', type=float, default=None, help='Seconds between downloads')
+    parser.add_argument('--image-mode', choices=('original', 'optimized'), default=None,
                         help='original: embed source files (default); optimized: convert near-opaque PNG to smaller JPEG (requires Pillow)')
-    parser.add_argument('--image-quality', type=int, default=85,
+    parser.add_argument('--image-quality', type=int, default=None,
                         help='JPEG quality for optimized PNGs, 1-100 (default: 85)')
-    parser.add_argument('--image-max-width', type=int, default=1600,
+    parser.add_argument('--image-max-width', type=int, default=None,
                         help='Max width when converting PNGs, in pixels (default: 1600)')
     parser.add_argument('--verbose', action='store_true', help='Show per-image download details')
-    parser.add_argument('--retries', type=int, default=5, help='Maximum attempts per chapter')
+    parser.add_argument('--retries', type=int, default=None, help='Maximum attempts per chapter')
 
 
 def _format_size(value: int) -> str:
@@ -61,13 +61,15 @@ def _print_summary(stats) -> None:
 
 
 def execute(args: argparse.Namespace) -> None:
+    settings = DownloaderSettings.load()
+    settings.validate()
     try:
         print('Connecting to RanobeLib...', flush=True)
         with LibSocialClient(KeyringTokenStorage().load()) as client:
             def report(current, total, chapter):
                 print(f'[{current}/{total}] {current / total:.0%}  {chapter}', flush=True)
             # Filename is derived from the API's stable numeric ID, not user input.
-            format_name = args.format
+            format_name = args.format or settings.format
             exporter = {'epub': EpubExporter, 'txt': TxtExporter, 'html': HtmlExporter}[format_name]()
             downloader = BookDownloader(client, exporter=exporter)
             plan = downloader.prepare(args.reference)
