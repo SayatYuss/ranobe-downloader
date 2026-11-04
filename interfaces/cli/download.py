@@ -79,8 +79,9 @@ def execute(args: argparse.Namespace) -> None:
                                         (message.startswith('[') and 'Loading chapter' in message)):
                     print(message, flush=True)
 
-            branch_id = args.branch if args.branch is not None else select_translation(
-                plan.translations, interactive=not args.non_interactive)
+            branch_id = args.branch if args.branch is not None else settings.branch_id
+            if branch_id is None:
+                branch_id = select_translation(plan.translations, interactive=not args.non_interactive)
             if args.list_chapters:
                 chapters = sorted(
                     (chapter for chapter in plan.chapters
@@ -99,7 +100,7 @@ def execute(args: argparse.Namespace) -> None:
             if not re.fullmatch(r"[A-Za-z0-9_-]+", slug):
                 raise ValueError("Unsafe title slug for output filename")
             branch_label = str(branch_id) if branch_id is not None else "default"
-            target = args.output or Path('output') / f'{slug}_{branch_label}.{format_name}'
+            target = args.output or Path(settings.output_dir) / f'{slug}_{branch_label}.{format_name}'
             result = downloader.download(plan, target,
                                          branch_id=branch_id, limit=args.limit,
                                          chapter_from=args.chapter_from, chapter_to=args.chapter_to,
