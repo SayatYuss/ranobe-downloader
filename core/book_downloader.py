@@ -16,7 +16,8 @@ from typing import Callable
 
 from core.chapter_content import ChapterContentUnavailable
 from exporters.epub import EpubExporter
-from exporters.text import TxtExporter
+from exporters.text import TxtExporter, HtmlExporter
+from core.settings import DownloaderSettings
 import httpx
 
 
@@ -32,7 +33,7 @@ def _chapter_order(chapter):
 class BookDownloader:
     def __init__(self, client=None, exporter=None, *,
                  titles=None, chapters=None, contents=None,
-                 media=None, cover_downloader=None):
+                 media=None, cover_downloader=None, settings: DownloaderSettings | None = None):
         """Inject any compatible content sources, or use the RanobeLib defaults.
 
         Existing BookDownloader(client, exporter) calls remain supported.
@@ -49,6 +50,10 @@ class BookDownloader:
             contents = contents if contents is not None else adapter.contents
             media = media if media is not None else adapter
             cover_downloader = cover_downloader if cover_downloader is not None else adapter.download_cover
+        self.settings = settings if settings is not None else DownloaderSettings.load()
+        self.settings.validate()
+        if exporter is None:
+            exporter = {'epub': EpubExporter, 'txt': TxtExporter, 'html': HtmlExporter}[self.settings.format]()
         self.titles = titles
         self.chapters = chapters
         self.contents = contents
@@ -76,12 +81,21 @@ class BookDownloader:
                  chapter_start_id: int | None = None,
                  chapter_end_id: int | None = None,
                  progress: Callable[[int, int, str], None] | None = None,
-                 resume: bool = False, cache_dir: str | Path = 'output/.cache',
-                 delay: float = 1.0, retries: int = 5,
+                 resume: bool | None = None, cache_dir: str | Path | None = None,
+                 delay: float | None = None, retries: int | None = None,
                  status: Callable[[str], None] | None = None,
-                 image_mode: str = 'original', image_quality: int = 85,
-                 image_max_width: int = 1600,
+                 image_mode: str | None = None, image_quality: int | None = None,
+                 image_max_width: int | None = None,
                  statistics: Callable[[DownloadStatistics], None] | None = None) -> Path:
+        resume = self.settings.resume if resume is None else resume
+        cache_dir = self.settings.cache_dir if cache_dir is None else cache_dir
+        delay = self.settings.delay if delay is None else delay
+        retries = self.settings.retries if retries is None else retries
+        image_mode = self.settings.image_mode if image_mode is None else image_mode
+        image_quality = self.settings.image_quality if image_quality is None else image_quality
+        image_max_width = self.settings.image_max_width if image_max_width is None else image_max_width
+        branch_id = self.settings.branch_id if branch_id is None else branch_id
+        limit = self.settings.limit if limit is None else limit
         if image_mode not in ('original', 'optimized') or not 1 <= image_quality <= 100 or image_max_width < 1:
             raise ValueError('Invalid image optimization settings')
         if delay < 0 or retries < 1:
