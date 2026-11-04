@@ -80,17 +80,17 @@ class Downloader:
             chapter_count=len(plan.chapters), _plan=plan,
         )
 
-    def download(self, book: Book | str, *, format: ExportFormat = "epub",
+    def download(self, book: Book | str, *, format: ExportFormat | None = None,
                  output: str | Path | None = None, branch_id: int | None = None,
                  limit: int | None = None,
                  chapter_from: str | int | None = None,
                  chapter_to: str | int | None = None,
                  chapter_start_id: int | None = None,
                  chapter_end_id: int | None = None,
-                 resume: bool = False,
-                 cache_dir: str | Path = "output/.cache", delay: float = 1.0,
-                 retries: int = 5, image_mode: str = "original",
-                 image_quality: int = 85, image_max_width: int = 1600,
+                 resume: bool | None = None,
+                 cache_dir: str | Path | None = None, delay: float | None = None,
+                 retries: int | None = None, image_mode: str | None = None,
+                 image_quality: int | None = None, image_max_width: int | None = None,
                  progress: Callable[[int, int, str], None] | None = None,
                  status: Callable[[str], None] | None = None,
                  statistics: Callable[[DownloadStatistics], None] | None = None) -> Path:
@@ -120,7 +120,7 @@ class Downloader:
             if not re.fullmatch(r"[A-Za-z0-9_-]+", book.slug_url):
                 raise ValueError("Unsafe book slug for output filename")
             suffix = str(branch_id) if branch_id is not None else "default"
-            output = Path("output") / f"{book.slug_url}_{suffix}.{format}"
+            output = Path(settings.output_dir) / f"{book.slug_url}_{suffix}.{format}"
         # Switch the exporter only for this invocation, restoring it even on errors.
         # This facade is synchronous; concurrent calls to one instance are unsupported.
         previous = self._backend.exporter
