@@ -5,6 +5,9 @@ import importlib.metadata
 import logging
 import shutil
 import sys
+import httpx
+import html
+from packaging.version import Version
 from collections import deque
 from threading import Event
 from pathlib import Path
@@ -27,6 +30,10 @@ from interfaces.pyside6.theme import apply_theme
 
 log = logging.getLogger(__name__)
 GITHUB = "https://github.com/SayatYuss"
+RELEASES_API = (
+    "https://api.github.com/repos/"
+    "SayatYuss/ranobe-downloader/releases/latest"
+)
 
 
 class Task(QObject):
@@ -64,6 +71,27 @@ def verify_token(task, token):
     with LibSocialClient(token) as client:
         user = client.get_current_user()
     return user["username"]
+
+def check_latest_release(task, current_version):
+    response = httpx.get(
+        RELEASES_API,
+        headers={"Accept": "application/vnd.github+json"},
+        timeout=5,
+    )
+    response.raise_for_status()
+
+    release = response.json()
+    latest = Version(release["tag_name"].removeprefix("v"))
+    current = Version(current_version)
+
+    if latest <= current:
+        return None
+
+    return {
+        "version": str(latest),
+        "url": release["html_url"],
+        "notes": release.get("body", ""),
+    }
 
 
 class DownloadCancelled(Exception):
@@ -259,6 +287,19 @@ class Window(QMainWindow):
         link = QLabel(f'Версия {version} · <a href="{GITHUB}">GitHub SayatYuss</a>')
         link.setOpenExternalLinks(True)
         settings_form.addRow("О программе", link)
+        self.check_updates_button = QPushButton("Проверить обновления")
+        self.check_updates_button.clicked.connect(
+            lambda: self.run_task(
+                check_latest_release,
+                current_version,
+                on_done=self.show_update,
+                on_failure=lambda error: log.warning(
+                    "Update check failed: %s", error
+                ),
+                busy=False,
+            )
+        )
+        settings_form.addRow("Обновления", self.check_updates_button)
         log_button = QPushButton("Открыть журнал")
         log_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root / "desktop.log"))))
         settings_form.addRow("Диагностика", log_button)
@@ -281,6 +322,18 @@ class Window(QMainWindow):
         self.update_scope()
         if self.token_store.load():
             self.run_task(verify_token, self.token_store.load(), on_done=self.set_user, busy=False)
+        
+        current_version = importlib.metadata.version("ranobe-downloader")
+
+        self.run_task(
+            check_latest_release,
+            current_version,
+            on_done=self.show_update,
+            on_failure=lambda error: log.warning(
+                "Update check failed: %s", error
+            ),
+            busy=False,
+        )
 
     def run_task(self, operation, *args, on_done, busy=True, on_failure=None):
         thread = QThread(self)
@@ -606,6 +659,43 @@ class Window(QMainWindow):
         self.token_store.delete()
         self.username.setText("Не авторизован")
         self.token_input.clear()
+        
+    def show_update(self, release):
+        if not release:
+            QMessageBox.information(
+                self,
+                "Обновления",
+                "Установлена последняя версия."
+            )
+            return
+
+        version = html.escape(release["version"])
+        notes = html.escape(release["notes"]).replace("\n", "<br>")
+
+        message = f"""
+        <h3>Доступна новая версия {version}</h3>
+        <p>Что нового:</p>
+        {notes}
+        <br>
+        <p>
+            <a href="{html.escape(release['url'], quote=True)}">
+                Посмотреть полный список изменений
+            </a>
+        </p>
+        <br>
+        Открыть страницу загрузки?
+        """
+
+        answer = QMessageBox.question(
+            self,
+            "Доступно обновление",
+            message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+
+        if answer == QMessageBox.StandardButton.Yes:
+            QDesktopServices.openUrl(QUrl(release["url"]))
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls() or event.mimeData().hasText():

@@ -14,6 +14,7 @@ keywords = ["ranobe", "ranobelib", "epub", "downloader"]
 dependencies = [
   "httpx>=0.27,<1",
   "keyring>=25,<27",
+  "packaging>=24",
 ]
 authors = [{name = "SayatYuss"}]
 
