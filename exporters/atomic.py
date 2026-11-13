@@ -18,7 +18,7 @@ def atomic_destination(destination: str | Path) -> Iterator[Path]:
                                 suffix=".tmp", delete=False) as handle:
             temporary = Path(handle.name)
         yield temporary
-        with temporary.open("rb") as handle:
+        with temporary.open("rb+") as handle:
             os.fsync(handle.fileno())
         os.replace(temporary, target)
     finally:
