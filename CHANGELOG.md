@@ -2,7 +2,13 @@
 
 Изменения сгруппированы по выпускам. Установка и использование: [README](README.md), все руководства: [docs](docs/README.md).
 
-## [0.4.1] — готовится к выпуску
+## [0.4.2] - 2026-11-13
+
+### Fixed
+- Fixed Windows atomic file export failure.
+- Fixed EPUB and TXT export errors caused by invalid file descriptors.
+
+## [0.4.1] — 2026-11-1
 
 ### Добавлено
 
