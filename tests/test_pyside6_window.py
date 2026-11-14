@@ -18,7 +18,7 @@ class WindowSmokeTest(unittest.TestCase):
                 from interfaces.pyside6.storage import Store
                 factory.side_effect = lambda: Store(__import__("pathlib").Path(directory))
                 keyring.return_value.load.return_value = None
-                window = Window()
+                window = Window(False)
                 self.assertEqual(window.tabs.count(), 4)
                 self.assertEqual(window.history.rowCount(), 0)
                 self.assertEqual(window.queue_table.rowCount(), 0)
