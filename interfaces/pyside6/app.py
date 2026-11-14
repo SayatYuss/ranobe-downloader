@@ -292,7 +292,7 @@ class Window(QMainWindow):
             lambda: self.run_task(
                 check_latest_release,
                 current_version,
-                on_done=self.show_update,
+                on_done=lambda release: self.show_update(release, show_latest=True),
                 on_failure=lambda error: log.warning(
                     "Update check failed: %s", error
                 ),
@@ -306,7 +306,8 @@ class Window(QMainWindow):
         self.tabs.addTab(settings_page, "Настройки")
 
         self.tray = QSystemTrayIcon(self)
-        self.tray.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
+        self.tray.setIcon(QIcon("docs-site/assets/favicon.svg"))
+        self.tray.setToolTip("Ranobe Downloader")
         menu = QMenu()
         show = QAction("Открыть", self)
         show.triggered.connect(self.restore_from_tray)
@@ -662,13 +663,14 @@ class Window(QMainWindow):
         self.username.setText("Не авторизован")
         self.token_input.clear()
         
-    def show_update(self, release):
+    def show_update(self, release, show_latest: bool = False):
         if not release:
-            QMessageBox.information(
-                self,
-                "Обновления",
-                "Установлена последняя версия."
-            )
+            if show_latest:
+                QMessageBox.information(
+                    self,
+                    "Обновления",
+                    "Установлена последняя версия."
+                )
             return
 
         version = html.escape(release["version"])
