@@ -119,7 +119,7 @@ def perform_download(task, book, branch, fmt, start_id, end_id, path, cache, tok
 
 
 class Window(QMainWindow):
-    def __init__(self):
+    def __init__(self, check_update_on_startup: bool = True):
         super().__init__()
         self.store = Store()
         configure_logging(self.store.root)
@@ -323,17 +323,19 @@ class Window(QMainWindow):
         if self.token_store.load():
             self.run_task(verify_token, self.token_store.load(), on_done=self.set_user, busy=False)
         
-        current_version = importlib.metadata.version("ranobe-downloader")
+        
+        if (check_update_on_startup):
+            current_version = importlib.metadata.version("ranobe-downloader")
 
-        self.run_task(
-            check_latest_release,
-            current_version,
-            on_done=self.show_update,
-            on_failure=lambda error: log.warning(
-                "Update check failed: %s", error
-            ),
-            busy=False,
-        )
+            self.run_task(
+                check_latest_release,
+                current_version,
+                on_done=self.show_update,
+                on_failure=lambda error: log.warning(
+                    "Update check failed: %s", error
+                ),
+                busy=False,
+            )
 
     def run_task(self, operation, *args, on_done, busy=True, on_failure=None):
         thread = QThread(self)

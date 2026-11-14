@@ -33,7 +33,7 @@ class PolishTests(unittest.TestCase):
         self.patches[0].start()
         self.patches[1].start().return_value.load.return_value = None
         self.patches[2].start()
-        self.window = Window()
+        self.window = Window(False)
 
     def tearDown(self):
         self.window.exiting = True
