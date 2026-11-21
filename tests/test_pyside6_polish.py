@@ -130,6 +130,30 @@ class PolishTests(unittest.TestCase):
             self.window.show_cover_preview()
             execute.assert_called_once()
 
+    def test_history_empty_search_and_contextual_actions(self):
+        self.assertFalse(self.window.history_empty.isHidden())
+        self.assertTrue(self.window.history.isHidden())
+        self.assertTrue(self.window.history_actions.isHidden())
+
+        self.window.store.history = [{
+            'title': 'Example Book', 'format': 'epub',
+            'date': '2026-11-21T12:30:00+06:00', 'size': 2 * 1048576,
+            'path': str(Path(self.temp.name) / 'example.epub'),
+        }]
+        self.window.reload_history()
+        self.assertEqual(self.window.history_count.text(), '1 файл')
+        self.assertFalse(self.window.history.isHidden())
+        self.assertTrue(self.window.history_empty.isHidden())
+        self.assertEqual(self.window.history.item(0, 1).text(), 'EPUB')
+        self.assertEqual(self.window.history.item(0, 2).text(), '21.11.2026 · 12:30')
+
+        self.window.history.selectRow(0)
+        self.assertFalse(self.window.history_actions.isHidden())
+
+        self.window.history_filter.setText('missing')
+        self.assertEqual(self.window.history_empty_title.text(), 'Ничего не найдено')
+        self.assertTrue(self.window.history_actions.isHidden())
+
 
 if __name__ == '__main__':
     unittest.main()

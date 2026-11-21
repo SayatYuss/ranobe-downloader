@@ -62,6 +62,11 @@ def apply_theme(app: QApplication, mode: str = "system"):
         QPushButton#primaryButton:disabled {{
             background: {outline}; color: {muted}; border-color: {outline};
         }}
+        QPushButton#dangerButton {{ color: {'#ff9b9b' if dark else '#b42318'}; }}
+        QPushButton#dangerButton:hover {{
+            background: {'#3a2024' if dark else '#fff1f0'};
+            border-color: {'#8f444c' if dark else '#f1aaa5'};
+        }}
         QTabBar::tab:selected {{ color: {accent}; border-bottom-color: {accent}; }}
         QProgressBar {{ background: {surface}; border-color: {outline}; }}
         QProgressBar::chunk {{ background: {accent}; }}
@@ -74,6 +79,7 @@ QMainWindow { background: palette(window); }
 QLabel#brandTitle { font-size: 18px; font-weight: 700; }
 QLabel#pageTitle { font-size: 22px; font-weight: 700; }
 QLabel#bookTitle { font-size: 18px; font-weight: 650; }
+QLabel#emptyTitle { font-size: 17px; font-weight: 650; }
 QLabel#fieldLabel { font-size: 11px; font-weight: 600; }
 QLabel#statusText { font-weight: 600; }
 QLabel#accountBadge, QLabel#formatBadge {
@@ -104,5 +110,7 @@ QProgressBar {
 }
 QProgressBar::chunk { border-radius: 3px; }
 QHeaderView::section { padding: 9px; border: 0; border-bottom: 1px solid palette(mid); }
+QTableCornerButton::section { border: 0; background: palette(base); }
+QTableWidget { padding: 0; border: 0; border-radius: 11px; }
 """
 

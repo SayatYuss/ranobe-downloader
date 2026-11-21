@@ -7,6 +7,7 @@ import shutil
 import sys
 import httpx
 import html
+from datetime import datetime
 from packaging.version import Version
 from collections import deque
 from threading import Event
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QSystemTrayIcon, QTabWidget, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget, QMenu, QAbstractItemView, QSizePolicy,
+    QTableWidgetItem, QVBoxLayout, QWidget, QMenu, QAbstractItemView, QSizePolicy, QHeaderView,
 )
 
 from core.auth.storage import KeyringTokenStorage
@@ -345,33 +346,99 @@ class Window(QMainWindow):
         self.tabs.addTab(download, "Скачать")
 
         history_page = QWidget()
+        history_page.setObjectName("historyPage")
         history_layout = QVBoxLayout(history_page)
+        history_layout.setContentsMargins(8, 18, 8, 8)
+        history_layout.setSpacing(14)
+
+        history_title = QLabel("История загрузок")
+        history_title.setObjectName("pageTitle")
+        history_hint = QLabel("Здесь хранятся готовые книги. Выберите запись, чтобы открыть или скачать её снова.")
+        history_hint.setObjectName("mutedText")
+        history_hint.setWordWrap(True)
+        history_layout.addWidget(history_title)
+        history_layout.addWidget(history_hint)
+
+        history_search_card = QFrame()
+        history_search_card.setObjectName("card")
+        history_search_layout = QHBoxLayout(history_search_card)
+        history_search_layout.setContentsMargins(16, 14, 16, 14)
+        history_search_layout.setSpacing(10)
         self.history_filter = QLineEdit()
-        self.history_filter.setPlaceholderText("Поиск по истории")
+        self.history_filter.setPlaceholderText("Поиск по названию или формату")
+        self.history_filter.setClearButtonEnabled(True)
         self.history_filter.textChanged.connect(self.reload_history)
-        history_layout.addWidget(self.history_filter)
+        history_search_layout.addWidget(self.history_filter, 1)
+        self.history_count = QLabel("0 файлов")
+        self.history_count.setObjectName("accountBadge")
+        history_search_layout.addWidget(self.history_count)
+        history_layout.addWidget(history_search_card)
+
+        history_card = QFrame()
+        history_card.setObjectName("card")
+        history_card_layout = QVBoxLayout(history_card)
+        history_card_layout.setContentsMargins(1, 1, 1, 1)
+        history_card_layout.setSpacing(0)
+
+        self.history_empty = QWidget()
+        empty_layout = QVBoxLayout(self.history_empty)
+        empty_layout.setContentsMargins(24, 48, 24, 48)
+        empty_layout.setSpacing(7)
+        empty_layout.addStretch()
+        self.history_empty_title = QLabel("История пока пуста")
+        self.history_empty_title.setObjectName("emptyTitle")
+        self.history_empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.history_empty_hint = QLabel("Скачанные книги появятся здесь автоматически.")
+        self.history_empty_hint.setObjectName("mutedText")
+        self.history_empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.history_empty_hint.setWordWrap(True)
+        empty_layout.addWidget(self.history_empty_title)
+        empty_layout.addWidget(self.history_empty_hint)
+        empty_layout.addStretch()
+        history_card_layout.addWidget(self.history_empty, 1)
+
         self.history = QTableWidget(0, 4)
         self.history.setHorizontalHeaderLabels(["Название", "Формат", "Дата", "Размер"])
-        self.history.horizontalHeader().setStretchLastSection(True)
+        history_header = self.history.horizontalHeader()
+        history_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for column in (1, 2, 3):
+            history_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        self.history.verticalHeader().setVisible(False)
+        self.history.setShowGrid(False)
+        self.history.setAlternatingRowColors(True)
         self.history.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.history.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.history.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.history.cellDoubleClicked.connect(self.open_history)
-        history_layout.addWidget(self.history)
-        open_btn = QPushButton("Открыть файл")
-        open_btn.clicked.connect(self.open_selected_history)
-        controls = QHBoxLayout()
-        controls.addWidget(open_btn)
-        folder_btn = QPushButton("Открыть папку")
-        folder_btn.clicked.connect(self.open_history_folder)
-        controls.addWidget(folder_btn)
-        delete_btn = QPushButton("Удалить запись")
-        delete_btn.clicked.connect(self.delete_history_record)
-        controls.addWidget(delete_btn)
-        repeat_btn = QPushButton("Повторить")
-        repeat_btn.clicked.connect(self.redownload_history)
-        controls.addWidget(repeat_btn)
+        self.history.itemSelectionChanged.connect(self.update_history_actions)
+        history_card_layout.addWidget(self.history, 1)
+        history_layout.addWidget(history_card, 1)
+
+        self.history_actions = QFrame()
+        self.history_actions.setObjectName("statusCard")
+        controls = QHBoxLayout(self.history_actions)
+        controls.setContentsMargins(12, 9, 12, 9)
+        controls.setSpacing(8)
+        selected_hint = QLabel("Выбрана книга")
+        selected_hint.setObjectName("mutedText")
+        controls.addWidget(selected_hint)
         controls.addStretch()
-        history_layout.addLayout(controls)
+        self.history_open_button = QPushButton("Открыть")
+        self.history_open_button.setObjectName("primaryButton")
+        self.history_open_button.clicked.connect(self.open_selected_history)
+        controls.addWidget(self.history_open_button)
+        self.history_folder_button = QPushButton("Показать в папке")
+        self.history_folder_button.clicked.connect(self.open_history_folder)
+        controls.addWidget(self.history_folder_button)
+        self.history_repeat_button = QPushButton("Скачать снова")
+        self.history_repeat_button.clicked.connect(self.redownload_history)
+        controls.addWidget(self.history_repeat_button)
+        self.history_delete_button = QPushButton("Удалить из истории")
+        self.history_delete_button.setObjectName("dangerButton")
+        self.history_delete_button.clicked.connect(self.delete_history_record)
+        controls.addWidget(self.history_delete_button)
+        self.history_actions.hide()
+        history_layout.addWidget(self.history_actions)
         self.tabs.addTab(history_page, "История")
 
         settings_page = QWidget()
@@ -732,20 +799,68 @@ class Window(QMainWindow):
         self.progress.setValue(round(current * 100 / total) if total else 0)
         self.status.setText(f"{current}/{total} — {chapter}")
 
+    @staticmethod
+    def history_count_text(count):
+        tail = count % 100
+        if 11 <= tail <= 14:
+            word = "файлов"
+        elif count % 10 == 1:
+            word = "файл"
+        elif count % 10 in (2, 3, 4):
+            word = "файла"
+        else:
+            word = "файлов"
+        return f"{count} {word}"
+
+    def update_history_actions(self):
+        self.history_actions.setVisible(self.selected_history_index() is not None)
+
     def reload_history(self):
         query = self.history_filter.text().strip().casefold()
         self.history_indices = [i for i, item in enumerate(self.store.history) if query in item.get("title", "").casefold() or query in item.get("format", "").casefold()]
+        self.history.clearSelection()
+        self.history.setCurrentCell(-1, -1)
         self.history.setRowCount(len(self.history_indices))
         for row, index in enumerate(self.history_indices):
             record = self.store.history[index]
             for col, key in enumerate(("title", "format", "date", "size")):
                 value = record.get(key, "")
                 if key == "size":
-                    value = f"{value / 1048576:.1f} MiB"
+                    size = int(value or 0)
+                    value = f"{size / 1048576:.1f} MiB" if size >= 1048576 else f"{size / 1024:.0f} KiB"
+                elif key == "date" and value:
+                    try:
+                        value = datetime.fromisoformat(str(value)).strftime("%d.%m.%Y · %H:%M")
+                    except ValueError:
+                        pass
+                elif key == "format":
+                    value = str(value).upper()
                 item = QTableWidgetItem(str(value))
                 if col == 0:
                     item.setData(Qt.ItemDataRole.UserRole, record.get("path"))
+                    item.setToolTip(str(record.get("path", "")))
+                elif col in (1, 2):
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                elif col == 3:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                if key == "format":
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
                 self.history.setItem(row, col, item)
+            self.history.setRowHeight(row, 44)
+
+        count = len(self.history_indices)
+        self.history_count.setText(self.history_count_text(count))
+        self.history.setVisible(bool(count))
+        self.history_empty.setVisible(not count)
+        if not count and query and self.store.history:
+            self.history_empty_title.setText("Ничего не найдено")
+            self.history_empty_hint.setText("Попробуйте изменить поисковый запрос.")
+        else:
+            self.history_empty_title.setText("История пока пуста")
+            self.history_empty_hint.setText("Скачанные книги появятся здесь автоматически.")
+        self.update_history_actions()
 
     def open_history(self, row, _column):
         item = self.history.item(row, 0)
