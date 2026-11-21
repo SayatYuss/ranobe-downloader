@@ -214,6 +214,12 @@ class Window(QMainWindow):
         self.reference.setClearButtonEnabled(True)
         self.reference.returnPressed.connect(self.find_book)
         search_layout.addWidget(self.reference, 1)
+        self.lookup_progress = QProgressBar()
+        self.lookup_progress.setRange(0, 0)
+        self.lookup_progress.setTextVisible(False)
+        self.lookup_progress.setFixedSize(48, 7)
+        self.lookup_progress.hide()
+        search_layout.addWidget(self.lookup_progress)
         find = self.find_button = QPushButton("Найти")
         find.setObjectName("secondaryButton")
         find.setMinimumWidth(104)
@@ -438,6 +444,7 @@ class Window(QMainWindow):
         self.reload_history()
         self.update_scope()
         self.update_queue()
+        self.set_book_controls_enabled(False)
         if self.token_store.load():
             self.run_task(verify_token, self.token_store.load(), on_done=self.set_user, busy=False)
         
@@ -489,29 +496,35 @@ class Window(QMainWindow):
         self.status.setText("Ошибка: " + message)
         QMessageBox.warning(self, "Ошибка", message)
 
+    def set_book_controls_enabled(self, enabled):
+        for widget in (self.translation, self.scope, self.fmt, self.add_button):
+            widget.setEnabled(enabled)
+        self.update_scope()
+
+    def set_lookup_busy(self, busy):
+        self.lookup_pending = busy
+        self.find_button.setEnabled(not busy)
+        self.find_button.setText("Поиск…" if busy else "Найти")
+        self.lookup_progress.setVisible(busy)
+        self.set_book_controls_enabled(not busy and self.book is not None)
+
     def find_book(self):
         reference = self.reference.text().strip()
         if not reference or self.lookup_pending:
             return
-        self.lookup_pending = True
-        self.find_button.setEnabled(False)
-        self.add_button.setEnabled(False)
+        self.set_lookup_busy(True)
         self.status.setText("Загрузка данных…")
         self.run_task(lookup, reference, self.token_store.load(), on_done=self.book_loaded, on_failure=self.lookup_failed)
 
     def lookup_failed(self, message):
-        self.lookup_pending = False
-        self.find_button.setEnabled(True)
-        self.add_button.setEnabled(True)
+        self.set_lookup_busy(False)
         self.repeat_record = None
         self.report_error(message)
 
     def book_loaded(self, result):
-        self.lookup_pending = False
-        self.find_button.setEnabled(True)
-        self.add_button.setEnabled(True)
-        self.scope.setCurrentIndex(0)
         self.book, cover = result
+        self.set_lookup_busy(False)
+        self.scope.setCurrentIndex(0)
         self.title_label.setText(self.book.title)
         self.cover_pixmap = None
         self.cover.clear()
@@ -617,7 +630,7 @@ class Window(QMainWindow):
         self.update_scope()
 
     def update_scope(self):
-        enabled = self.scope.currentIndex() == 3
+        enabled = self.book is not None and not self.lookup_pending and self.scope.currentIndex() == 3
         self.start.setEnabled(enabled)
         self.end.setEnabled(enabled)
 
@@ -660,8 +673,12 @@ class Window(QMainWindow):
             self.queue_status.setText(f"Ожидают загрузки: {waiting}")
         else:
             self.queue_status.setText("Очередь пуста")
-        self.cancel_button.setEnabled(self.current_task is not None)
-        self.clear_queue_button.setEnabled(bool(self.pending))
+        has_current = self.current_task is not None
+        has_waiting = bool(self.pending)
+        self.cancel_button.setVisible(has_current)
+        self.cancel_button.setEnabled(has_current)
+        self.clear_queue_button.setVisible(has_waiting)
+        self.clear_queue_button.setEnabled(has_waiting)
         self.add_button.setText("Добавить в очередь" if self.running else "Скачать")
 
     def clear_pending(self):

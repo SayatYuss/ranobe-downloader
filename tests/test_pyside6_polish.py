@@ -86,15 +86,39 @@ class PolishTests(unittest.TestCase):
             self.assertEqual(self.app._desktop_theme_mode, mode)
 
     def test_compact_queue_status_and_clear(self):
+        self.assertTrue(self.window.cancel_button.isHidden())
+        self.assertTrue(self.window.clear_queue_button.isHidden())
         entry = (SimpleNamespace(title='Book'), None, 'epub', None, None, Path('book.epub'))
         self.window.pending.append(entry)
         self.window.update_queue()
         self.assertEqual(self.window.queue_status.text(), 'Ожидают загрузки: 1')
         self.assertTrue(self.window.clear_queue_button.isEnabled())
+        self.assertFalse(self.window.clear_queue_button.isHidden())
 
         self.window.clear_pending()
         self.assertEqual(self.window.queue_status.text(), 'Очередь пуста')
         self.assertFalse(self.window.pending)
+        self.assertTrue(self.window.clear_queue_button.isHidden())
+
+    def test_lookup_state_disables_book_controls_and_shows_progress(self):
+        self.assertFalse(self.window.translation.isEnabled())
+        self.assertFalse(self.window.scope.isEnabled())
+        self.assertFalse(self.window.fmt.isEnabled())
+        self.assertFalse(self.window.add_button.isEnabled())
+        self.assertTrue(self.window.lookup_progress.isHidden())
+
+        self.window.set_lookup_busy(True)
+        self.assertEqual(self.window.find_button.text(), 'Поиск…')
+        self.assertFalse(self.window.lookup_progress.isHidden())
+
+        self.window.book = SimpleNamespace()
+        self.window.set_lookup_busy(False)
+        self.assertEqual(self.window.find_button.text(), 'Найти')
+        self.assertTrue(self.window.lookup_progress.isHidden())
+        self.assertTrue(self.window.translation.isEnabled())
+        self.assertTrue(self.window.scope.isEnabled())
+        self.assertTrue(self.window.fmt.isEnabled())
+        self.assertTrue(self.window.add_button.isEnabled())
 
     def test_cover_preview_requires_loaded_pixmap(self):
         with patch.object(QDialog, 'exec') as execute:
