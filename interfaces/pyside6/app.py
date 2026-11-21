@@ -16,7 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QFileDialog, QScrollArea,
+    QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QScrollArea,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QSystemTrayIcon, QTabWidget, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget, QMenu, QAbstractItemView, QSizePolicy, QHeaderView,
@@ -73,6 +73,48 @@ class CoverLabel(QLabel):
             event.accept()
             return
         super().keyPressEvent(event)
+
+
+class FormatSelector(QWidget):
+    """Compact exclusive buttons with the small QComboBox API used by the window."""
+
+    FORMATS = ("epub", "txt", "html")
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.buttons = []
+        for index, value in enumerate(self.FORMATS):
+            button = QPushButton(value.upper())
+            button.setObjectName("formatButton")
+            button.setCheckable(True)
+            button.setAccessibleName(f"Формат {value.upper()}")
+            self.group.addButton(button, index)
+            self.buttons.append(button)
+            layout.addWidget(button, 1)
+        self.buttons[0].setChecked(True)
+
+    def currentText(self):
+        checked = self.group.checkedId()
+        return self.FORMATS[checked] if checked >= 0 else self.FORMATS[0]
+
+    def currentIndex(self):
+        checked = self.group.checkedId()
+        return checked if checked >= 0 else 0
+
+    def findText(self, value):
+        try:
+            return self.FORMATS.index(str(value).lower())
+        except ValueError:
+            return -1
+
+    def setCurrentIndex(self, index):
+        if 0 <= index < len(self.buttons):
+            self.buttons[index].setChecked(True)
 
 
 def lookup(task, reference, token):
@@ -147,6 +189,7 @@ class Window(QMainWindow):
         self.token_store = KeyringTokenStorage()
         self.book = None
         self.cover_pixmap = None
+        self.cover_available = False
         self.chapters = ()
         self.translation_ids = []
         self.pending = deque()
@@ -255,15 +298,20 @@ class Window(QMainWindow):
         details_layout.addLayout(cover_column)
 
         options = QVBoxLayout()
-        options.setSpacing(13)
+        options.setSpacing(7)
         self.title_label = QLabel("Выберите произведение")
         self.title_label.setObjectName("bookTitle")
         self.title_label.setWordWrap(True)
         options.addWidget(self.title_label)
+        self.book_details = QLabel()
+        self.book_details.setObjectName("bookMeta")
+        self.book_details.setWordWrap(True)
+        self.book_details.hide()
+        options.addWidget(self.book_details)
 
         fields = QGridLayout()
         fields.setHorizontalSpacing(12)
-        fields.setVerticalSpacing(7)
+        fields.setVerticalSpacing(4)
         fields.setColumnStretch(0, 1)
         fields.setColumnStretch(1, 1)
 
@@ -282,8 +330,7 @@ class Window(QMainWindow):
         self.scope = QComboBox()
         self.scope.addItems(["Все главы", "Первые 10", "Последние 10", "Диапазон"])
         self.scope.currentIndexChanged.connect(self.update_scope)
-        self.fmt = QComboBox()
-        self.fmt.addItems(["epub", "txt", "html"])
+        self.fmt = FormatSelector()
         fields.addWidget(scope_label, 2, 0)
         fields.addWidget(format_label, 2, 1)
         fields.addWidget(self.scope, 3, 0)
@@ -689,6 +736,7 @@ class Window(QMainWindow):
         self.scope.setCurrentIndex(0)
         self.title_label.setText(self.book.title)
         self.cover_pixmap = None
+        self.cover_available = False
         self.cover.clear()
         cover_loaded = False
         if cover:
@@ -699,6 +747,7 @@ class Window(QMainWindow):
                 self.cover.setObjectName("coverPreview")
                 self.cover.setCursor(Qt.CursorShape.PointingHandCursor)
                 self.cover.setToolTip("Нажмите, чтобы увеличить обложку")
+                self.cover_available = True
                 cover_loaded = True
         if not cover_loaded:
             self.cover.setObjectName("coverPlaceholder")
@@ -717,6 +766,8 @@ class Window(QMainWindow):
             self.translation.addItem("Без выбора перевода")
         self.translation.blockSignals(False)
         self.translation_changed()
+        self.book_details.show()
+        self.update_book_details()
         self.status.setText("Готово")
         if self.repeat_record is not None:
             self.apply_repeat_selection()
@@ -789,7 +840,28 @@ class Window(QMainWindow):
                 widget.addItem(f"Том {ch['volume']}, глава {ch['number']}: {ch['name'] or ''}", ch["id"])
         if self.chapters:
             self.end.setCurrentIndex(len(self.chapters) - 1)
+        self.update_book_details()
         self.update_scope()
+
+    def update_book_details(self):
+        if not self.book:
+            self.book_details.hide()
+            return
+        authors = ", ".join(getattr(self.book, "authors", ()) or ()) or "не указан"
+        chapter_count = getattr(self.book, "chapter_count", len(self.chapters))
+        translation = "не выбран"
+        index = self.translation.currentIndex()
+        translations = getattr(self.book, "translations", ())
+        if 0 <= index < len(translations):
+            translation = translations[index].name or "без названия"
+        elif not translations:
+            translation = "единственный"
+        cover_status = "доступна" if self.cover_available else "недоступна"
+        self.book_details.setText(
+            f"Автор: {authors}  ·  Глав: {chapter_count}  ·  "
+            f"Перевод: {translation}  ·  Обложка: {cover_status}"
+        )
+        self.book_details.setToolTip(self.book_details.text())
 
     def update_scope(self):
         enabled = self.book is not None and not self.lookup_pending and self.scope.currentIndex() == 3

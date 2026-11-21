@@ -130,6 +130,28 @@ class PolishTests(unittest.TestCase):
             self.window.show_cover_preview()
             execute.assert_called_once()
 
+    def test_format_buttons_and_book_metadata(self):
+        translation = SimpleNamespace(branch_id=7, name='Team', chapter_count=12)
+        book = SimpleNamespace(
+            title='Example Book', authors=('Author One', 'Author Two'),
+            chapter_count=12, translations=(translation,),
+            list_chapters=lambda branch_id: ({
+                'id': 1, 'volume': '1', 'number': '1', 'name': 'Start',
+            },),
+        )
+        self.window.book_loaded((book, None))
+
+        self.assertFalse(self.window.book_details.isHidden())
+        self.assertIn('Автор: Author One, Author Two', self.window.book_details.text())
+        self.assertIn('Глав: 12', self.window.book_details.text())
+        self.assertIn('Перевод: Team', self.window.book_details.text())
+        self.assertIn('Обложка: недоступна', self.window.book_details.text())
+        self.assertEqual(self.window.fmt.currentText(), 'epub')
+
+        self.window.fmt.buttons[2].click()
+        self.assertEqual(self.window.fmt.currentText(), 'html')
+        self.assertTrue(self.window.fmt.buttons[2].isChecked())
+
     def test_history_empty_search_and_contextual_actions(self):
         self.assertFalse(self.window.history_empty.isHidden())
         self.assertTrue(self.window.history.isHidden())

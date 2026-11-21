@@ -43,6 +43,7 @@ def apply_theme(app: QApplication, mode: str = "system"):
         QFrame#card {{ background: {surface}; border: 1px solid {outline}; }}
         QFrame#statusCard {{ background: {elevated}; border: 1px solid {outline}; }}
         QLabel#mutedText, QLabel#fieldLabel {{ color: {muted}; }}
+        QLabel#bookMeta {{ color: {muted}; }}
         QLabel#accountBadge, QLabel#formatBadge {{
             color: {muted}; background: {elevated}; border: 1px solid {outline};
         }}
@@ -63,6 +64,16 @@ def apply_theme(app: QApplication, mode: str = "system"):
         QPushButton#primaryButton:disabled {{
             background: {outline}; color: {muted}; border-color: {outline};
         }}
+        QPushButton#formatButton {{
+            background: {elevated}; color: {muted}; border-color: {outline};
+        }}
+        QPushButton#formatButton:hover {{ color: {text}; border-color: {accent}; }}
+        QPushButton#formatButton:checked {{
+            background: {accent}; color: #ffffff; border-color: {accent};
+        }}
+        QPushButton#formatButton:disabled {{
+            background: {elevated}; color: {muted}; border-color: {outline};
+        }}
         QPushButton#dangerButton {{ color: {'#ff9b9b' if dark else '#b42318'}; }}
         QPushButton#dangerButton:hover {{
             background: {'#3a2024' if dark else '#fff1f0'};
@@ -80,6 +91,7 @@ QMainWindow { background: palette(window); }
 QLabel#brandTitle { font-size: 18px; font-weight: 700; }
 QLabel#pageTitle { font-size: 22px; font-weight: 700; }
 QLabel#bookTitle { font-size: 18px; font-weight: 650; }
+QLabel#bookMeta { font-size: 11px; }
 QLabel#sectionTitle { font-size: 16px; font-weight: 650; }
 QLabel#emptyTitle { font-size: 17px; font-weight: 650; }
 QLabel#fieldLabel { font-size: 11px; font-weight: 600; }
@@ -105,6 +117,7 @@ QPushButton {
     font-weight: 600;
 }
 QPushButton#compactButton { padding: 5px 10px; font-size: 11px; }
+QPushButton#formatButton { padding: 7px 10px; font-size: 11px; }
 QPushButton:disabled { color: palette(mid); }
 QProgressBar {
     border: 1px solid palette(mid); border-radius: 4px; height: 7px;

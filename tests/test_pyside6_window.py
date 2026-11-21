@@ -11,6 +11,7 @@ class WindowSmokeTest(unittest.TestCase):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
         from interfaces.pyside6.app import Window
+        owns_app = QApplication.instance() is None
         app = QApplication.instance() or QApplication([])
         with tempfile.TemporaryDirectory() as directory:
             with patch("interfaces.pyside6.app.Store") as factory, \
@@ -29,7 +30,8 @@ class WindowSmokeTest(unittest.TestCase):
                 window.theme_box.setCurrentIndex(0)
                 window.exiting = True
                 window.close()
-        app.quit()
+        if owns_app:
+            app.quit()
 
 if __name__ == "__main__":
     unittest.main()
