@@ -18,6 +18,6 @@ def asset_path(name: str) -> Path:
 
 
 def application_icon() -> QIcon:
-    # ICO avoids relying on the SVG image plugin in a frozen Windows build and
-    # contains the small sizes used by the notification area.
-    return QIcon(str(asset_path("ranobe.ico")))
+    # PNG is supported by Qt on every target OS without an optional SVG plugin.
+    # Native ICO/ICNS files are used separately for the packaged executables.
+    return QIcon(str(asset_path("ranobe.png")))

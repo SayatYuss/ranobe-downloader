@@ -59,9 +59,9 @@ jobs:
           python -m PyInstaller --noconfirm --clean --name RanobeDownloader \
             --collect-submodules keyring.backends \
             --copy-metadata ranobe-downloader \
-            --add-data "interfaces/pyside6/assets/ranobe.ico:." \
+            --add-data "interfaces/pyside6/assets/ranobe.png:." \
             ${{ matrix.platform == 'windows' && '--onefile --noconsole --icon interfaces/pyside6/assets/ranobe.ico' || '--onedir' }} \
-            ${{ matrix.platform == 'macos' && '--windowed' || '' }} \
+            ${{ matrix.platform == 'macos' && '--windowed --icon interfaces/pyside6/assets/ranobe.icns' || '' }} \
             interfaces/pyside6/app.py
       - name: Windows EXE
         if: matrix.platform == 'windows'
@@ -79,12 +79,11 @@ jobs:
         if: matrix.platform == 'linux'
         shell: bash
         run: |
-          python -m pip install -q cairosvg
           mkdir -p AppDir/usr/bin
           cp -a dist/RanobeDownloader/. AppDir/usr/bin/
           cp packaging/ranobe.desktop AppDir/ranobe.desktop
           cp packaging/AppRun AppDir/AppRun
-          python -c 'import cairosvg; cairosvg.svg2png(url="packaging/ranobe.svg", write_to="AppDir/ranobe.png", output_width=256, output_height=256)'
+          cp interfaces/pyside6/assets/ranobe.png AppDir/ranobe.png
           chmod +x AppDir/AppRun
           curl --fail --location --retry 3 https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool.AppImage
           chmod +x appimagetool.AppImage
