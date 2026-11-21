@@ -19,9 +19,9 @@ class WindowSmokeTest(unittest.TestCase):
                 factory.side_effect = lambda: Store(__import__("pathlib").Path(directory))
                 keyring.return_value.load.return_value = None
                 window = Window(False)
-                self.assertEqual(window.tabs.count(), 4)
+                self.assertEqual(window.tabs.count(), 3)
                 self.assertEqual(window.history.rowCount(), 0)
-                self.assertEqual(window.queue_table.rowCount(), 0)
+                self.assertEqual(window.queue_status.text(), "Очередь пуста")
                 window.theme_box.setCurrentIndex(2)
                 self.assertEqual(window.store.settings["theme"], "dark")
                 window.theme_box.setCurrentIndex(0)

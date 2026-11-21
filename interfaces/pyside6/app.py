@@ -287,37 +287,28 @@ class Window(QMainWindow):
         status_header = QHBoxLayout()
         status_title = QLabel("Состояние")
         status_title.setObjectName("fieldLabel")
+        self.queue_status = QLabel("Очередь пуста")
+        self.queue_status.setObjectName("mutedText")
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
         self.status = QLabel("Готово")
         self.status.setObjectName("statusText")
         status_header.addWidget(status_title)
+        status_header.addWidget(self.queue_status)
         status_header.addStretch()
         status_header.addWidget(self.status)
+        self.cancel_button = QPushButton("Отменить загрузку")
+        self.cancel_button.setObjectName("compactButton")
+        self.cancel_button.clicked.connect(self.cancel_current)
+        self.clear_queue_button = QPushButton("Очистить ожидающие")
+        self.clear_queue_button.setObjectName("compactButton")
+        self.clear_queue_button.clicked.connect(self.clear_pending)
+        status_header.addWidget(self.cancel_button)
+        status_header.addWidget(self.clear_queue_button)
         status_layout.addLayout(status_header)
         status_layout.addWidget(self.progress)
         download_layout.addWidget(status_card)
         self.tabs.addTab(download, "Скачать")
-
-        queue_page = QWidget()
-        queue_layout = QVBoxLayout(queue_page)
-        self.queue_table = QTableWidget(0, 3)
-        self.queue_table.setHorizontalHeaderLabels(["Книга", "Формат", "Состояние"])
-        self.queue_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.queue_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.queue_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.queue_table.horizontalHeader().setStretchLastSection(True)
-        queue_layout.addWidget(self.queue_table)
-        queue_controls = QHBoxLayout()
-        self.cancel_button = QPushButton("Отменить текущую")
-        self.cancel_button.clicked.connect(self.cancel_current)
-        remove_queue_button = QPushButton("Удалить из очереди")
-        remove_queue_button.clicked.connect(self.remove_pending)
-        queue_controls.addWidget(self.cancel_button)
-        queue_controls.addWidget(remove_queue_button)
-        queue_controls.addStretch()
-        queue_layout.addLayout(queue_controls)
-        self.tabs.addTab(queue_page, "Очередь")
 
         history_page = QWidget()
         history_layout = QVBoxLayout(history_page)
@@ -418,6 +409,7 @@ class Window(QMainWindow):
             self.tray.show()
         self.reload_history()
         self.update_scope()
+        self.update_queue()
         if self.token_store.load():
             self.run_task(verify_token, self.token_store.load(), on_done=self.set_user, busy=False)
         
@@ -596,27 +588,28 @@ class Window(QMainWindow):
         self.run_next()
 
     def update_queue(self):
-        rows = ([self.current] if self.current else []) + list(self.pending)
-        self.queue_table.setRowCount(len(rows))
-        for row, entry in enumerate(rows):
-            book, branch, fmt, start, end, path = entry
-            for col, value in enumerate((book.title, fmt.upper(), "Скачивается" if row == 0 and self.current else "Ожидает")):
-                self.queue_table.setItem(row, col, QTableWidgetItem(value))
+        waiting = len(self.pending)
+        if self.current:
+            title = self.current[0].title
+            suffix = f" · ожидают: {waiting}" if waiting else ""
+            self.queue_status.setText(f"Скачивается: {title}{suffix}")
+        elif waiting:
+            self.queue_status.setText(f"Ожидают загрузки: {waiting}")
+        else:
+            self.queue_status.setText("Очередь пуста")
         self.cancel_button.setEnabled(self.current_task is not None)
+        self.clear_queue_button.setEnabled(bool(self.pending))
+        self.add_button.setText("Добавить в очередь" if self.running else "Скачать")
 
-    def remove_pending(self):
-        selected = self.queue_table.currentRow()
-        index = selected - (1 if self.current else 0)
-        if index < 0 or index >= len(self.pending):
-            return
-        del self.pending[index]
+    def clear_pending(self):
+        self.pending.clear()
         self.update_queue()
 
     def cancel_current(self):
         if self.current_task:
             self.current_task.cancel.set()
             self.status.setText("Отмена после текущей операции…")
-            self.queue_table.setItem(0, 2, QTableWidgetItem("Отменяется"))
+            self.queue_status.setText("Текущая загрузка отменяется…")
             self.cancel_button.setEnabled(False)
 
     def run_next(self):

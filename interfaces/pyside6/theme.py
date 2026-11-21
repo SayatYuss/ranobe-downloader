@@ -94,6 +94,7 @@ QPushButton {
     padding: 9px 16px; border: 1px solid palette(mid); border-radius: 8px;
     font-weight: 600;
 }
+QPushButton#compactButton { padding: 5px 10px; font-size: 11px; }
 QPushButton:disabled { color: palette(mid); }
 QProgressBar {
     border: 1px solid palette(mid); border-radius: 4px; height: 7px;

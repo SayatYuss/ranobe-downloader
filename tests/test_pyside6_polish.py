@@ -84,6 +84,17 @@ class PolishTests(unittest.TestCase):
             apply_theme(self.app, mode)
             self.assertEqual(self.app._desktop_theme_mode, mode)
 
+    def test_compact_queue_status_and_clear(self):
+        entry = (SimpleNamespace(title='Book'), None, 'epub', None, None, Path('book.epub'))
+        self.window.pending.append(entry)
+        self.window.update_queue()
+        self.assertEqual(self.window.queue_status.text(), 'Ожидают загрузки: 1')
+        self.assertTrue(self.window.clear_queue_button.isEnabled())
+
+        self.window.clear_pending()
+        self.assertEqual(self.window.queue_status.text(), 'Очередь пуста')
+        self.assertFalse(self.window.pending)
+
 
 if __name__ == '__main__':
     unittest.main()
