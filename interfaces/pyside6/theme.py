@@ -48,6 +48,8 @@ def apply_theme(app: QApplication, mode: str = "system"):
         QLabel#coverPlaceholder {{
             color: {muted}; background: {elevated}; border: 1px dashed {outline};
         }}
+        QLabel#coverPreview {{ background: {elevated}; border: 1px solid {outline}; }}
+        QLabel#coverPreview:hover {{ border-color: {accent}; }}
         QLineEdit, QComboBox, QTableWidget, QPlainTextEdit {{
             background: {elevated}; border-color: {outline}; selection-background-color: {accent};
         }}
@@ -77,7 +79,7 @@ QLabel#statusText { font-weight: 600; }
 QLabel#accountBadge, QLabel#formatBadge {
     border-radius: 11px; padding: 5px 10px; font-size: 11px; font-weight: 600;
 }
-QLabel#coverPlaceholder { border-radius: 10px; padding: 12px; }
+QLabel#coverPlaceholder, QLabel#coverPreview { border-radius: 10px; padding: 12px; }
 QFrame#card, QFrame#statusCard { border-radius: 12px; }
 QTabWidget::pane { border: 0; }
 QTabBar::tab {

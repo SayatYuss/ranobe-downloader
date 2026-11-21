@@ -54,6 +54,26 @@ class Task(QObject):
             self.failed.emit(str(exc))
 
 
+class CoverLabel(QLabel):
+    """Book cover that opens a larger preview when an image is available."""
+
+    clicked = Signal()
+
+    def mousePressEvent(self, event):
+        pixmap = self.pixmap()
+        if event.button() == Qt.MouseButton.LeftButton and pixmap is not None and not pixmap.isNull():
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        pixmap = self.pixmap()
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and pixmap is not None and not pixmap.isNull():
+            self.clicked.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 def lookup(task, reference, token):
     with Downloader(token=token) as downloader:
         book = downloader.get_book(reference)
@@ -125,6 +145,7 @@ class Window(QMainWindow):
         configure_logging(self.store.root)
         self.token_store = KeyringTokenStorage()
         self.book = None
+        self.cover_pixmap = None
         self.chapters = ()
         self.translation_ids = []
         self.pending = deque()
@@ -211,11 +232,14 @@ class Window(QMainWindow):
         cover_column = QVBoxLayout()
         cover_column.setSpacing(9)
         cover_column.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.cover = QLabel("Обложка\nпоявится после поиска")
+        self.cover = CoverLabel("Обложка\nпоявится после поиска")
         self.cover.setObjectName("coverPlaceholder")
         self.cover.setFixedSize(142, 198)
         self.cover.setWordWrap(True)
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cover.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.cover.setAccessibleName("Обложка произведения")
+        self.cover.clicked.connect(self.show_cover_preview)
         cover_column.addWidget(self.cover, 0, Qt.AlignmentFlag.AlignHCenter)
         cover_note = QLabel("EPUB · TXT · HTML")
         cover_note.setObjectName("formatBadge")
@@ -489,15 +513,25 @@ class Window(QMainWindow):
         self.scope.setCurrentIndex(0)
         self.book, cover = result
         self.title_label.setText(self.book.title)
+        self.cover_pixmap = None
         self.cover.clear()
         cover_loaded = False
         if cover:
             pixmap = QPixmap()
             if pixmap.loadFromData(cover):
+                self.cover_pixmap = pixmap
                 self.cover.setPixmap(pixmap.scaled(self.cover.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                self.cover.setObjectName("coverPreview")
+                self.cover.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.cover.setToolTip("Нажмите, чтобы увеличить обложку")
                 cover_loaded = True
         if not cover_loaded:
+            self.cover.setObjectName("coverPlaceholder")
+            self.cover.unsetCursor()
+            self.cover.setToolTip("")
             self.cover.setText("Обложка\nнедоступна")
+        self.cover.style().unpolish(self.cover)
+        self.cover.style().polish(self.cover)
         self.translation.blockSignals(True)
         self.translation.clear()
         self.translation_ids = [t.branch_id for t in self.book.translations]
@@ -511,6 +545,31 @@ class Window(QMainWindow):
         self.status.setText("Готово")
         if self.repeat_record is not None:
             self.apply_repeat_selection()
+
+    def show_cover_preview(self):
+        if self.cover_pixmap is None or self.cover_pixmap.isNull():
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Обложка — {self.book.title if self.book else 'Ranobe Downloader'}")
+        dialog.setModal(True)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+        preview = QLabel()
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        available = self.screen().availableGeometry()
+        preview_width = min(560, round(available.width() * 0.7))
+        preview_height = min(720, round(available.height() * 0.75))
+        preview.setPixmap(self.cover_pixmap.scaled(
+            preview_width, preview_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        ))
+        layout.addWidget(preview)
+        close = QPushButton("Закрыть")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
+        dialog.exec()
 
     def apply_repeat_selection(self):
         record = self.repeat_record

@@ -14,7 +14,8 @@ if importlib.util.find_spec("PySide6") is None:
     raise unittest.SkipTest("PySide6 optional dependency is absent")
 
 from PySide6.QtCore import QThread
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QApplication, QDialog
 from interfaces.pyside6.app import Window, perform_download, DownloadCancelled
 from interfaces.pyside6.storage import Store
 from interfaces.pyside6.theme import apply_theme
@@ -94,6 +95,16 @@ class PolishTests(unittest.TestCase):
         self.window.clear_pending()
         self.assertEqual(self.window.queue_status.text(), 'Очередь пуста')
         self.assertFalse(self.window.pending)
+
+    def test_cover_preview_requires_loaded_pixmap(self):
+        with patch.object(QDialog, 'exec') as execute:
+            self.window.show_cover_preview()
+            execute.assert_not_called()
+
+            self.window.cover_pixmap = QPixmap(40, 60)
+            self.window.cover_pixmap.fill()
+            self.window.show_cover_preview()
+            execute.assert_called_once()
 
 
 if __name__ == '__main__':
