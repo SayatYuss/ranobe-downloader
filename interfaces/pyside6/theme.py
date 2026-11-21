@@ -39,6 +39,7 @@ def apply_theme(app: QApplication, mode: str = "system"):
     app.setStyleSheet(STYLE + f"""
         QWidget {{ color: {text}; }}
         QMainWindow, QWidget#appShell {{ background: {base}; }}
+        QScrollArea#settingsScroll, QWidget#settingsContent {{ background: transparent; border: 0; }}
         QFrame#card {{ background: {surface}; border: 1px solid {outline}; }}
         QFrame#statusCard {{ background: {elevated}; border: 1px solid {outline}; }}
         QLabel#mutedText, QLabel#fieldLabel {{ color: {muted}; }}
@@ -79,6 +80,7 @@ QMainWindow { background: palette(window); }
 QLabel#brandTitle { font-size: 18px; font-weight: 700; }
 QLabel#pageTitle { font-size: 22px; font-weight: 700; }
 QLabel#bookTitle { font-size: 18px; font-weight: 650; }
+QLabel#sectionTitle { font-size: 16px; font-weight: 650; }
 QLabel#emptyTitle { font-size: 17px; font-weight: 650; }
 QLabel#fieldLabel { font-size: 11px; font-weight: 600; }
 QLabel#statusText { font-weight: 600; }
@@ -112,5 +114,8 @@ QProgressBar::chunk { border-radius: 3px; }
 QHeaderView::section { padding: 9px; border: 0; border-bottom: 1px solid palette(mid); }
 QTableCornerButton::section { border: 0; background: palette(base); }
 QTableWidget { padding: 0; border: 0; border-radius: 11px; }
+QScrollBar:vertical { width: 8px; margin: 0; background: transparent; }
+QScrollBar::handle:vertical { min-height: 32px; border-radius: 4px; background: palette(mid); }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 

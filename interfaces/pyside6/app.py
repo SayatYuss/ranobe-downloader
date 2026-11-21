@@ -16,7 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QApplication, QComboBox, QDialog, QFileDialog, QScrollArea,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QSystemTrayIcon, QTabWidget, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget, QMenu, QAbstractItemView, QSizePolicy, QHeaderView,
@@ -442,40 +442,130 @@ class Window(QMainWindow):
         self.tabs.addTab(history_page, "История")
 
         settings_page = QWidget()
-        settings_form = QFormLayout(settings_page)
+        settings_page.setObjectName("settingsPage")
+        settings_layout = QVBoxLayout(settings_page)
+        settings_layout.setContentsMargins(8, 18, 8, 8)
+        settings_layout.setSpacing(14)
+
+        settings_title = QLabel("Настройки")
+        settings_title.setObjectName("pageTitle")
+        settings_hint = QLabel("Управляйте сохранением книг, оформлением, авторизацией и обслуживанием приложения.")
+        settings_hint.setObjectName("mutedText")
+        settings_hint.setWordWrap(True)
+        settings_layout.addWidget(settings_title)
+        settings_layout.addWidget(settings_hint)
+
+        self.settings_scroll = QScrollArea()
+        self.settings_scroll.setObjectName("settingsScroll")
+        self.settings_scroll.setWidgetResizable(True)
+        self.settings_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.settings_scroll.viewport().setAutoFillBackground(False)
+        settings_content = QWidget()
+        settings_content.setObjectName("settingsContent")
+        settings_cards_layout = QVBoxLayout(settings_content)
+        settings_cards_layout.setContentsMargins(0, 0, 6, 0)
+        settings_cards_layout.setSpacing(12)
+        self.settings_cards = []
+
+        def create_settings_card(title, description):
+            card = QFrame()
+            card.setObjectName("card")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(18, 16, 18, 16)
+            card_layout.setSpacing(10)
+            heading = QLabel(title)
+            heading.setObjectName("sectionTitle")
+            note = QLabel(description)
+            note.setObjectName("mutedText")
+            note.setWordWrap(True)
+            card_layout.addWidget(heading)
+            card_layout.addWidget(note)
+            self.settings_cards.append(card)
+            settings_cards_layout.addWidget(card)
+            return card_layout
+
+        downloads_layout = create_settings_card(
+            "Загрузки",
+            "Выберите папку для готовых книг и управляйте временными файлами.",
+        )
+        directory_label = QLabel("Папка загрузок")
+        directory_label.setObjectName("fieldLabel")
+        downloads_layout.addWidget(directory_label)
         self.directory = QLineEdit(self.store.settings.get("directory", ""))
         browse = QPushButton("Обзор…")
         browse.clicked.connect(self.choose_dir)
         directory_row = QHBoxLayout()
         directory_row.addWidget(self.directory)
         directory_row.addWidget(browse)
-        settings_form.addRow("Папка загрузок", directory_row)
+        downloads_layout.addLayout(directory_row)
         self.directory.editingFinished.connect(self.save_dir)
-        self.theme_box = QComboBox()
-        self.theme_box.addItems(["Системная", "Светлая", "Тёмная"])
-        self.theme_box.setCurrentIndex({"system": 0, "light": 1, "dark": 2}.get(self.store.settings.get("theme", "system"), 0))
-        self.theme_box.currentIndexChanged.connect(self.change_theme)
-        settings_form.addRow("Тема", self.theme_box)
-        settings_form.addRow("Кеш", QLabel(str(self.store.cache)))
+
+        cache_row = QHBoxLayout()
+        cache_info = QVBoxLayout()
+        cache_info.setSpacing(2)
+        cache_label = QLabel("Кеш глав и изображений")
+        cache_label.setObjectName("fieldLabel")
+        cache_path = QLabel(str(self.store.cache))
+        cache_path.setObjectName("mutedText")
+        cache_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        cache_info.addWidget(cache_label)
+        cache_info.addWidget(cache_path)
+        cache_row.addLayout(cache_info, 1)
         clear = QPushButton("Очистить кеш")
         clear.clicked.connect(self.clear_cache)
-        settings_form.addRow("", clear)
+        cache_row.addWidget(clear)
+        downloads_layout.addLayout(cache_row)
+
+        appearance_layout = create_settings_card(
+            "Оформление",
+            "Системная тема автоматически следует настройкам операционной системы.",
+        )
+        appearance_row = QHBoxLayout()
+        theme_label = QLabel("Тема приложения")
+        theme_label.setObjectName("fieldLabel")
+        appearance_row.addWidget(theme_label)
+        appearance_row.addStretch()
+        self.theme_box = QComboBox()
+        self.theme_box.addItems(["Системная", "Светлая", "Тёмная"])
+        self.theme_box.setMinimumWidth(200)
+        self.theme_box.setCurrentIndex({"system": 0, "light": 1, "dark": 2}.get(self.store.settings.get("theme", "system"), 0))
+        self.theme_box.currentIndexChanged.connect(self.change_theme)
+        appearance_row.addWidget(self.theme_box)
+        appearance_layout.addLayout(appearance_row)
+
+        account_layout = create_settings_card(
+            "Авторизация",
+            "Токен сохраняется в системном хранилище учётных данных и нужен только для доступных вам материалов.",
+        )
+        token_label = QLabel("Bearer-токен RanobeLib")
+        token_label.setObjectName("fieldLabel")
+        account_layout.addWidget(token_label)
         self.token_input = QLineEdit()
         self.token_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_input.setPlaceholderText("Bearer token")
-        settings_form.addRow("Токен", self.token_input)
+        self.token_input.returnPressed.connect(self.login)
+        account_layout.addWidget(self.token_input)
         auth_row = QHBoxLayout()
+        auth_row.addStretch()
         connect = QPushButton("Войти")
+        connect.setObjectName("primaryButton")
         connect.clicked.connect(self.login)
         logout = QPushButton("Выйти")
         logout.clicked.connect(self.logout)
         auth_row.addWidget(connect)
         auth_row.addWidget(logout)
-        settings_form.addRow("", auth_row)
+        account_layout.addLayout(auth_row)
+
+        application_layout = create_settings_card(
+            "Приложение",
+            "Проверяйте обновления и открывайте журнал при диагностике проблем.",
+        )
         current_version = importlib.metadata.version("ranobe-downloader")
         link = QLabel(f'Версия {current_version} · <a href="{GITHUB}">GitHub SayatYuss</a>')
         link.setOpenExternalLinks(True)
-        settings_form.addRow("О программе", link)
+        application_layout.addWidget(link)
+        application_actions = QHBoxLayout()
+        application_actions.addStretch()
         self.check_updates_button = QPushButton("Проверить обновления")
         self.check_updates_button.clicked.connect(
             lambda: self.run_task(
@@ -488,10 +578,15 @@ class Window(QMainWindow):
                 busy=False,
             )
         )
-        settings_form.addRow("Обновления", self.check_updates_button)
+        application_actions.addWidget(self.check_updates_button)
         log_button = QPushButton("Открыть журнал")
         log_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root / "desktop.log"))))
-        settings_form.addRow("Диагностика", log_button)
+        application_actions.addWidget(log_button)
+        application_layout.addLayout(application_actions)
+
+        settings_cards_layout.addStretch(1)
+        self.settings_scroll.setWidget(settings_content)
+        settings_layout.addWidget(self.settings_scroll, 1)
         self.tabs.addTab(settings_page, "Настройки")
 
         self.tray = QSystemTrayIcon(self)
