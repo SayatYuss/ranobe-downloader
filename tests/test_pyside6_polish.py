@@ -14,7 +14,7 @@ if importlib.util.find_spec("PySide6") is None:
     raise unittest.SkipTest("PySide6 optional dependency is absent")
 
 from PySide6.QtCore import QCoreApplication, QEvent, QThread
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QDialog
 from interfaces.pyside6.app import Window, perform_download, DownloadCancelled
 from interfaces.pyside6.storage import Store
@@ -206,6 +206,18 @@ class PolishTests(unittest.TestCase):
         self.assertTrue(self.window.token_entry.isHidden())
         self.assertTrue(self.window.login_button.isHidden())
         self.assertFalse(self.window.logout_button.isHidden())
+
+    def test_missing_icon_does_not_enable_invisible_tray(self):
+        self.window.exiting = True
+        self.window.close()
+        self.window.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.app.processEvents()
+        with patch('interfaces.pyside6.app.application_icon', return_value=QIcon()), \
+             patch('interfaces.pyside6.app.QSystemTrayIcon.isSystemTrayAvailable', return_value=True):
+            self.window = Window(False)
+        self.assertTrue(self.window.tray.icon().isNull())
+        self.assertFalse(self.window.tray.isVisible())
 
     def test_download_preferences_update_ui_and_store(self):
         self.window.default_format_box.setCurrentIndex(

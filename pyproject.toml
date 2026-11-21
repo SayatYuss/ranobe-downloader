@@ -55,3 +55,6 @@ where = ["."]
 include = ["core*", "providers*", "exporters*", "interfaces*", "ranobe_downloader*"]
 namespaces = true
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"interfaces.pyside6" = ["assets/*"]

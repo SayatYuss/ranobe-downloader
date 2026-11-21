@@ -59,7 +59,8 @@ jobs:
           python -m PyInstaller --noconfirm --clean --name RanobeDownloader \
             --collect-submodules keyring.backends \
             --copy-metadata ranobe-downloader \
-            ${{ matrix.platform == 'windows' && '--onefile --noconsole' || '--onedir' }} \
+            --add-data "interfaces/pyside6/assets/ranobe.ico:." \
+            ${{ matrix.platform == 'windows' && '--onefile --noconsole --icon interfaces/pyside6/assets/ranobe.ico' || '--onedir' }} \
             ${{ matrix.platform == 'macos' && '--windowed' || '' }} \
             interfaces/pyside6/app.py
       - name: Windows EXE

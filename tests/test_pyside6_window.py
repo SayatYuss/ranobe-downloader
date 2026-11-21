@@ -26,6 +26,8 @@ class WindowSmokeTest(unittest.TestCase):
                 self.assertEqual(window.queue_status.text(), "Очередь пуста")
                 self.assertEqual(len(window.settings_cards), 5)
                 self.assertTrue(window.settings_scroll.widgetResizable())
+                self.assertFalse(window.windowIcon().isNull())
+                self.assertFalse(window.tray.icon().isNull())
                 window.theme_box.setCurrentIndex(2)
                 self.assertEqual(window.store.settings["theme"], "dark")
                 window.theme_box.setCurrentIndex(0)

@@ -6,7 +6,7 @@ import sys
 from collections import deque
 
 from PySide6.QtCore import QThread, Slot
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -24,6 +24,7 @@ from core.auth.storage import KeyringTokenStorage
 from interfaces.pyside6.pages.download import DownloadPageMixin
 from interfaces.pyside6.pages.history import HistoryPageMixin
 from interfaces.pyside6.pages.settings import SettingsPageMixin
+from interfaces.pyside6.resources import application_icon
 from interfaces.pyside6.storage import Store, configure_logging
 from interfaces.pyside6.tasks import (
     DownloadCancelled,
@@ -76,6 +77,11 @@ class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow
         self.exiting = False
 
         self.setWindowTitle("Ranobe Downloader")
+        self.app_icon = application_icon()
+        if not self.app_icon.isNull():
+            self.setWindowIcon(self.app_icon)
+        else:
+            log.warning("Application icon could not be loaded")
         self.resize(980, 700)
         self.setMinimumSize(840, 700)
         self.setAcceptDrops(True)
@@ -118,7 +124,7 @@ class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow
 
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self)
-        self.tray.setIcon(QIcon("docs-site/assets/favicon.svg"))
+        self.tray.setIcon(self.app_icon)
         self.tray.setToolTip("Ranobe Downloader")
         menu = QMenu()
         show = QAction("Открыть", self)
@@ -129,8 +135,10 @@ class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self.tray_activated)
-        if QSystemTrayIcon.isSystemTrayAvailable():
+        if QSystemTrayIcon.isSystemTrayAvailable() and not self.app_icon.isNull():
             self.tray.show()
+        elif QSystemTrayIcon.isSystemTrayAvailable():
+            log.warning("System tray is available, but its icon could not be loaded")
 
     def _initialize_pages(self, check_update_on_startup):
         self.reload_history()
@@ -262,8 +270,11 @@ def main():
         return 0
     app = QApplication(sys.argv)
     app.setApplicationName("RanobeDownloader")
-    app.setQuitOnLastWindowClosed(not QSystemTrayIcon.isSystemTrayAvailable())
+    icon = application_icon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
     window = Window()
+    app.setQuitOnLastWindowClosed(not window.tray.isVisible())
     apply_theme(app, window.store.settings.get("theme", "system"))
     window.show()
     return app.exec()
