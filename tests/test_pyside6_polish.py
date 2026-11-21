@@ -180,6 +180,33 @@ class PolishTests(unittest.TestCase):
         self.assertEqual(self.window.history_empty_title.text(), 'Ничего не найдено')
         self.assertTrue(self.window.history_actions.isHidden())
 
+    def test_non_modal_toast(self):
+        self.assertTrue(self.window.toast.isHidden())
+        self.window.show_toast('Готово', timeout=10000)
+        self.assertFalse(self.window.toast.isHidden())
+        self.assertEqual(self.window.toast.label.text(), 'Готово')
+
+    def test_cache_size_is_displayed_and_refreshed(self):
+        cached = self.window.store.cache / 'chapter.bin'
+        cached.write_bytes(b'x' * 1048576)
+        self.window.refresh_cache_size()
+        self.assertEqual(self.window.cache_size_label.text(), 'Использовано: 1.0 MiB')
+
+        self.window.clear_cache()
+        self.assertEqual(self.window.cache_size_label.text(), 'Использовано: 0 B')
+        self.assertEqual(self.window.toast.label.text(), 'Кеш очищен')
+
+    def test_authorized_state_hides_token_entry(self):
+        self.assertEqual(self.window.auth_status.text(), 'Не авторизован')
+        self.assertFalse(self.window.token_entry.isHidden())
+        self.assertTrue(self.window.logout_button.isHidden())
+
+        self.window.set_user('reader')
+        self.assertEqual(self.window.auth_status.text(), 'Авторизован: reader')
+        self.assertTrue(self.window.token_entry.isHidden())
+        self.assertTrue(self.window.login_button.isHidden())
+        self.assertFalse(self.window.logout_button.isHidden())
+
 
 if __name__ == '__main__':
     unittest.main()

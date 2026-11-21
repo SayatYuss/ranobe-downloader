@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -203,7 +202,7 @@ class HistoryPageMixin:
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         else:
-            QMessageBox.information(self, "Файл", "Файл был перемещён или удалён")
+            self.show_toast("Файл был перемещён или удалён")
 
     def open_selected_history(self):
         row = self.history.currentRow()
@@ -221,13 +220,17 @@ class HistoryPageMixin:
         path = Path(self.store.history[index]["path"]).parent
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        else:
+            self.show_toast("Папка с файлом больше не существует")
 
     def delete_history_record(self):
         index = self.selected_history_index()
         if index is not None:
+            title = self.store.history[index].get("title", "Книга")
             del self.store.history[index]
             self.store.save_history()
             self.reload_history()
+            self.show_toast(f"Удалено из истории: {title}")
 
     def redownload_history(self):
         index = self.selected_history_index()
@@ -236,11 +239,7 @@ class HistoryPageMixin:
         record = self.store.history[index]
         reference = record.get("reference")
         if not reference:
-            QMessageBox.information(
-                self,
-                "Повторить",
-                "Для старой записи не сохранена ссылка на произведение.",
-            )
+            self.show_toast("Для этой записи не сохранена ссылка на произведение")
             return
         self.repeat_record = dict(record)
         self.reference.setText(reference)

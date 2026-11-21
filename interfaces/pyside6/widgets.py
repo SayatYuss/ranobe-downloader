@@ -1,8 +1,44 @@
 """Small reusable widgets used by the desktop pages."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
+
+
+class Toast(QFrame):
+    """Short, non-modal notification displayed over the current window."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("toast")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMinimumWidth(260)
+        self.setMaximumWidth(440)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 11, 14, 11)
+        self.label = QLabel()
+        self.label.setWordWrap(True)
+        layout.addWidget(self.label)
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.hide)
+        self.hide()
+
+    def show_message(self, message, timeout=3500):
+        self.label.setText(message)
+        self.adjustSize()
+        self.reposition()
+        self.show()
+        self.raise_()
+        self.timer.start(timeout)
+
+    def reposition(self):
+        if self.parentWidget() is None:
+            return
+        margin = 20
+        x = max(margin, self.parentWidget().width() - self.width() - margin)
+        y = max(margin, self.parentWidget().height() - self.height() - margin)
+        self.move(x, y)
 
 
 class CoverLabel(QLabel):

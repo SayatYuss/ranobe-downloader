@@ -34,12 +34,12 @@ from interfaces.pyside6.tasks import (
     verify_token,
 )
 from interfaces.pyside6.theme import apply_theme
-from interfaces.pyside6.widgets import CoverLabel, FormatSelector
+from interfaces.pyside6.widgets import CoverLabel, FormatSelector, Toast
 
 log = logging.getLogger(__name__)
 __all__ = [
     "Window", "main", "lookup", "perform_download", "DownloadCancelled",
-    "CoverLabel", "FormatSelector",
+    "CoverLabel", "FormatSelector", "Toast",
 ]
 
 # Backward-compatible names for callers that imported these from app.py.
@@ -114,6 +114,7 @@ class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow
         self.tabs.setDocumentMode(True)
         layout.addWidget(self.tabs)
         self.setCentralWidget(wrapper)
+        self.toast = Toast(wrapper)
 
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self)
@@ -138,7 +139,14 @@ class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow
         self.set_book_controls_enabled(False)
         token = self.token_store.load()
         if token:
-            self.run_task(verify_token, token, on_done=self.set_user, busy=False)
+            self.set_auth_state(pending=True)
+            self.run_task(
+                verify_token,
+                token,
+                on_done=self.set_user,
+                on_failure=self.auth_failed,
+                busy=False,
+            )
         if check_update_on_startup:
             self.run_task(
                 check_latest_release,
@@ -185,6 +193,14 @@ class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow
     def report_error(self, message):
         self.status.setText("Ошибка: " + message)
         QMessageBox.warning(self, "Ошибка", message)
+
+    def show_toast(self, message, timeout=3500):
+        self.toast.show_message(message, timeout)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "toast") and self.toast.isVisible():
+            self.toast.reposition()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls() or event.mimeData().hasText():

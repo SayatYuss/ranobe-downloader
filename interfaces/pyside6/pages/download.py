@@ -401,8 +401,11 @@ class DownloadPageMixin:
         self.add_button.setText("Добавить в очередь" if self.running else "Скачать")
 
     def clear_pending(self):
+        count = len(self.pending)
         self.pending.clear()
         self.update_queue()
+        if count:
+            self.show_toast(f"Удалено ожидающих загрузок: {count}")
 
     def cancel_current(self):
         if self.current_task:
@@ -439,6 +442,7 @@ class DownloadPageMixin:
             )
             self.reload_history()
             self.status.setText(f"Сохранено: {saved}")
+            self.show_toast(f"Загрузка завершена: {book.title}")
             if self.tray.isVisible():
                 self.tray.showMessage("Ranobe Downloader", f"Загрузка завершена: {book.title}")
             self.run_next()
@@ -450,6 +454,7 @@ class DownloadPageMixin:
             self.active_paths.discard(path)
             if message.startswith("CANCELLED:"):
                 self.status.setText("Отменено")
+                self.show_toast("Загрузка отменена")
             else:
                 self.status.setText("Ошибка загрузки")
                 QMessageBox.warning(self, "Ошибка", message)

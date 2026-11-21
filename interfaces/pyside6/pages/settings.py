@@ -98,11 +98,14 @@ class SettingsPageMixin:
         cache_info.setSpacing(2)
         cache_label = QLabel("Кеш глав и изображений")
         cache_label.setObjectName("fieldLabel")
-        cache_path = QLabel(str(self.store.cache))
-        cache_path.setObjectName("mutedText")
-        cache_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.cache_path_label = QLabel(str(self.store.cache))
+        self.cache_path_label.setObjectName("mutedText")
+        self.cache_path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.cache_size_label = QLabel()
+        self.cache_size_label.setObjectName("statusText")
         cache_info.addWidget(cache_label)
-        cache_info.addWidget(cache_path)
+        cache_info.addWidget(self.cache_path_label)
+        cache_info.addWidget(self.cache_size_label)
         cache_row.addLayout(cache_info, 1)
         clear = QPushButton("Очистить кеш")
         clear.clicked.connect(self.clear_cache)
@@ -134,23 +137,31 @@ class SettingsPageMixin:
             "Авторизация",
             "Токен сохраняется в системном хранилище учётных данных и нужен только для доступных вам материалов.",
         )
+        self.auth_status = QLabel("Не авторизован")
+        self.auth_status.setObjectName("authStatus")
+        account.addWidget(self.auth_status)
+        self.token_entry = QWidget()
+        token_entry_layout = QVBoxLayout(self.token_entry)
+        token_entry_layout.setContentsMargins(0, 0, 0, 0)
+        token_entry_layout.setSpacing(6)
         token_label = QLabel("Bearer-токен RanobeLib")
         token_label.setObjectName("fieldLabel")
-        account.addWidget(token_label)
+        token_entry_layout.addWidget(token_label)
         self.token_input = QLineEdit()
         self.token_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_input.setPlaceholderText("Bearer token")
         self.token_input.returnPressed.connect(self.login)
-        account.addWidget(self.token_input)
+        token_entry_layout.addWidget(self.token_input)
+        account.addWidget(self.token_entry)
         auth_actions = QHBoxLayout()
         auth_actions.addStretch()
-        connect = QPushButton("Войти")
-        connect.setObjectName("primaryButton")
-        connect.clicked.connect(self.login)
-        logout = QPushButton("Выйти")
-        logout.clicked.connect(self.logout)
-        auth_actions.addWidget(connect)
-        auth_actions.addWidget(logout)
+        self.login_button = QPushButton("Войти")
+        self.login_button.setObjectName("primaryButton")
+        self.login_button.clicked.connect(self.login)
+        self.logout_button = QPushButton("Выйти")
+        self.logout_button.clicked.connect(self.logout)
+        auth_actions.addWidget(self.login_button)
+        auth_actions.addWidget(self.logout_button)
         account.addLayout(auth_actions)
 
         application = create_card(
@@ -179,6 +190,10 @@ class SettingsPageMixin:
         self.settings_scroll.setWidget(content)
         layout.addWidget(self.settings_scroll, 1)
         self.tabs.addTab(page, "Настройки")
+        self.settings_page = page
+        self.tabs.currentChanged.connect(self._settings_tab_changed)
+        self.refresh_cache_size()
+        self.set_auth_state()
 
     def change_theme(self):
         mode = ("system", "light", "dark")[self.theme_box.currentIndex()]
@@ -198,14 +213,60 @@ class SettingsPageMixin:
 
     def clear_cache(self):
         if self.running or self.pending:
-            QMessageBox.information(self, "Кеш", "Дождитесь завершения загрузок")
+            self.show_toast("Кеш можно очистить после завершения загрузок")
             return
         shutil.rmtree(self.store.cache, ignore_errors=True)
         self.store.cache.mkdir(exist_ok=True)
+        self.refresh_cache_size()
+        self.show_toast("Кеш очищен")
+
+    @staticmethod
+    def format_size(size):
+        value = float(size)
+        for unit in ("B", "KiB", "MiB", "GiB"):
+            if value < 1024 or unit == "GiB":
+                return f"{value:.0f} {unit}" if unit in ("B", "KiB") else f"{value:.1f} {unit}"
+            value /= 1024
+
+    def refresh_cache_size(self):
+        total = 0
+        try:
+            for path in self.store.cache.rglob("*"):
+                if path.is_file():
+                    try:
+                        total += path.stat().st_size
+                    except OSError:
+                        continue
+        except OSError:
+            pass
+        self.cache_size_label.setText(f"Использовано: {self.format_size(total)}")
+
+    def _settings_tab_changed(self, index):
+        if self.tabs.widget(index) is self.settings_page:
+            self.refresh_cache_size()
+
+    def set_auth_state(self, username=None, pending=False):
+        if pending:
+            self.auth_status.setText("Проверка авторизации…")
+            self.token_entry.hide()
+            self.login_button.hide()
+            self.logout_button.hide()
+            return
+        if username:
+            self.auth_status.setText(f"Авторизован: {username}")
+            self.token_entry.hide()
+            self.login_button.hide()
+            self.logout_button.show()
+        else:
+            self.auth_status.setText("Не авторизован")
+            self.token_entry.show()
+            self.login_button.show()
+            self.logout_button.hide()
 
     def set_user(self, username):
         self.username.setText(username)
         self.token_input.clear()
+        self.set_auth_state(username)
 
     def login(self):
         token = self.token_input.text().strip()
@@ -214,16 +275,25 @@ class SettingsPageMixin:
         if not token:
             return
 
+        self.set_auth_state(pending=True)
+
         def success(username):
             self.token_store.save(token)
             self.set_user(username)
+            self.show_toast(f"Выполнен вход: {username}")
 
-        self.run_task(verify_token, token, on_done=success)
+        self.run_task(verify_token, token, on_done=success, on_failure=self.auth_failed)
+
+    def auth_failed(self, message):
+        self.set_auth_state()
+        self.report_error(message)
 
     def logout(self):
         self.token_store.delete()
         self.username.setText("Не авторизован")
         self.token_input.clear()
+        self.set_auth_state()
+        self.show_toast("Вы вышли из учётной записи")
 
     def check_updates(self):
         self.run_task(
@@ -237,7 +307,7 @@ class SettingsPageMixin:
     def show_update(self, release, show_latest=False):
         if not release:
             if show_latest:
-                QMessageBox.information(self, "Обновления", "Установлена последняя версия.")
+                self.show_toast("Установлена последняя версия")
             return
         version = html.escape(release["version"])
         notes = html.escape(release["notes"]).replace("\n", "<br>")

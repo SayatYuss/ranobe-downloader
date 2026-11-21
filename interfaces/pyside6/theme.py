@@ -49,8 +49,14 @@ def apply_theme(app: QApplication, mode: str = "system"):
         QScrollArea#settingsScroll, QWidget#settingsContent {{ background: transparent; border: 0; }}
         QFrame#card {{ background: {surface}; border: 1px solid {outline}; }}
         QFrame#statusCard {{ background: {elevated}; border: 1px solid {outline}; }}
+        QFrame#toast {{
+            background: {surface}; border: 1px solid {accent}; color: {text};
+        }}
         QLabel#mutedText, QLabel#fieldLabel {{ color: {muted}; }}
         QLabel#bookMeta {{ color: {muted}; }}
+        QLabel#authStatus {{
+            color: {accent}; background: {elevated}; border: 1px solid {outline};
+        }}
         QLabel#accountBadge, QLabel#formatBadge {{
             color: {muted}; background: {elevated}; border: 1px solid {outline};
         }}
@@ -99,6 +105,7 @@ QLabel#brandTitle { font-size: 18px; font-weight: 700; }
 QLabel#pageTitle { font-size: 22px; font-weight: 700; }
 QLabel#bookTitle { font-size: 18px; font-weight: 650; }
 QLabel#bookMeta { font-size: 11px; }
+QLabel#authStatus { border-radius: 8px; padding: 8px 10px; font-weight: 600; }
 QLabel#sectionTitle { font-size: 16px; font-weight: 650; }
 QLabel#emptyTitle { font-size: 17px; font-weight: 650; }
 QLabel#fieldLabel { font-size: 11px; font-weight: 600; }
@@ -108,6 +115,7 @@ QLabel#accountBadge, QLabel#formatBadge {
 }
 QLabel#coverPlaceholder, QLabel#coverPreview { border-radius: 10px; padding: 12px; }
 QFrame#card, QFrame#statusCard { border-radius: 12px; }
+QFrame#toast { border-radius: 10px; }
 QTabWidget::pane { border: 0; }
 QTabBar::tab {
     padding: 11px 18px; margin-right: 4px; border: 0;
