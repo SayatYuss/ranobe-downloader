@@ -202,6 +202,8 @@ class Window(QMainWindow):
 
         details_card = QFrame()
         details_card.setObjectName("card")
+        details_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        details_card.setMaximumHeight(310)
         details_layout = QHBoxLayout(details_card)
         details_layout.setContentsMargins(18, 18, 18, 18)
         details_layout.setSpacing(22)
@@ -277,10 +279,11 @@ class Window(QMainWindow):
         self.add_button.clicked.connect(self.enqueue)
         options.addWidget(self.add_button)
         details_layout.addLayout(options, 1)
-        download_layout.addWidget(details_card, 1)
+        download_layout.addWidget(details_card)
 
         status_card = QFrame()
         status_card.setObjectName("statusCard")
+        status_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         status_layout = QVBoxLayout(status_card)
         status_layout.setContentsMargins(16, 12, 16, 12)
         status_layout.setSpacing(7)
@@ -308,6 +311,7 @@ class Window(QMainWindow):
         status_layout.addLayout(status_header)
         status_layout.addWidget(self.progress)
         download_layout.addWidget(status_card)
+        download_layout.addStretch(1)
         self.tabs.addTab(download, "Скачать")
 
         history_page = QWidget()
