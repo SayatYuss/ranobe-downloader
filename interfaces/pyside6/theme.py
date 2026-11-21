@@ -1,4 +1,6 @@
 """Polished neutral Qt styling with system/light/dark palette support."""
+import weakref
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
@@ -7,10 +9,15 @@ def apply_theme(app: QApplication, mode: str = "system"):
     app.setStyle("Fusion")
     app._desktop_theme_mode = mode
     if not getattr(app, "_desktop_theme_connected", False):
-        app.styleHints().colorSchemeChanged.connect(
-            lambda _: apply_theme(app, "system")
-            if app._desktop_theme_mode == "system" else None
-        )
+        app_ref = weakref.ref(app)
+
+        def sync_system_theme(_):
+            current = app_ref()
+            if current is not None and current._desktop_theme_mode == "system":
+                apply_theme(current, "system")
+
+        app._desktop_theme_callback = sync_system_theme
+        app.styleHints().colorSchemeChanged.connect(sync_system_theme)
         app._desktop_theme_connected = True
     dark = mode == "dark" or (
         mode == "system" and app.styleHints().colorScheme() == Qt.ColorScheme.Dark

@@ -13,7 +13,7 @@ from unittest.mock import patch
 if importlib.util.find_spec("PySide6") is None:
     raise unittest.SkipTest("PySide6 optional dependency is absent")
 
-from PySide6.QtCore import QThread
+from PySide6.QtCore import QCoreApplication, QEvent, QThread
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QDialog
 from interfaces.pyside6.app import Window, perform_download, DownloadCancelled
@@ -40,6 +40,10 @@ class PolishTests(unittest.TestCase):
         self.window.exiting = True
         self.window.tray.hide()
         self.window.close()
+        self.window.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.app.processEvents()
+        self.window = None
         for p in reversed(self.patches):
             p.stop()
         self.temp.cleanup()
@@ -47,7 +51,7 @@ class PolishTests(unittest.TestCase):
     def test_cancel_before_download(self):
         task = SimpleNamespace(cancel=Event())
         task.cancel.set()
-        with patch('interfaces.pyside6.app.Downloader') as downloader:
+        with patch('interfaces.pyside6.tasks.Downloader') as downloader:
             with self.assertRaises(DownloadCancelled):
                 perform_download(task, None, None, 'txt', None, None, None, None, None)
             downloader.assert_not_called()
@@ -66,7 +70,7 @@ class PolishTests(unittest.TestCase):
     def test_missing_repeat_chapter_does_not_enqueue(self):
         self.window.translation_ids = [7]
         self.window.repeat_record = {'start_id': 99}
-        with patch.object(self.window, 'enqueue') as enqueue, patch('interfaces.pyside6.app.QMessageBox.warning'):
+        with patch.object(self.window, 'enqueue') as enqueue, patch('interfaces.pyside6.pages.download.QMessageBox.warning'):
             self.window.apply_repeat_selection()
             enqueue.assert_not_called()
 

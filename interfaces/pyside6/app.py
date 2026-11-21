@@ -1,192 +1,61 @@
-"""Native Qt desktop application, separate from the CLI and web interfaces."""
+"""Desktop application composition, worker-thread dispatch and lifecycle."""
 from __future__ import annotations
 
-import importlib.metadata
 import logging
-import shutil
 import sys
-import httpx
-import html
-from datetime import datetime
-from packaging.version import Version
 from collections import deque
-from threading import Event
-from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
+from PySide6.QtCore import QThread, Slot
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QScrollArea,
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit,
-    QProgressBar, QPushButton, QSystemTrayIcon, QTabWidget, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget, QMenu, QAbstractItemView, QSizePolicy, QHeaderView,
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QSystemTrayIcon,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from core.auth.storage import KeyringTokenStorage
-from providers.libsocial.client import LibSocialClient
-from providers.libsocial.cover import download_cover
-from ranobe_downloader import Downloader
+from interfaces.pyside6.pages.download import DownloadPageMixin
+from interfaces.pyside6.pages.history import HistoryPageMixin
+from interfaces.pyside6.pages.settings import SettingsPageMixin
 from interfaces.pyside6.storage import Store, configure_logging
+from interfaces.pyside6.tasks import (
+    DownloadCancelled,
+    Task,
+    check_latest_release,
+    lookup_book,
+    perform_download,
+    verify_token,
+)
 from interfaces.pyside6.theme import apply_theme
+from interfaces.pyside6.widgets import CoverLabel, FormatSelector
 
 log = logging.getLogger(__name__)
-GITHUB = "https://github.com/SayatYuss"
-RELEASES_API = (
-    "https://api.github.com/repos/"
-    "SayatYuss/ranobe-downloader/releases/latest"
-)
+__all__ = [
+    "Window", "main", "lookup", "perform_download", "DownloadCancelled",
+    "CoverLabel", "FormatSelector",
+]
+
+# Backward-compatible names for callers that imported these from app.py.
+lookup = lookup_book
 
 
-class Task(QObject):
-    done = Signal(object)
-    progress = Signal(int, int, str)
-    failed = Signal(str)
+class Window(DownloadPageMixin, HistoryPageMixin, SettingsPageMixin, QMainWindow):
+    """Top-level window coordinating independent pages and shared application state."""
 
-    def __init__(self, operation, *args):
-        super().__init__()
-        self.operation, self.args = operation, args
-        self.cancel = Event()
-
-    def run(self):
-        try:
-            self.done.emit(self.operation(self, *self.args))
-        except Exception as exc:
-            log.exception("Desktop task failed")
-            self.failed.emit(str(exc))
-
-
-class CoverLabel(QLabel):
-    """Book cover that opens a larger preview when an image is available."""
-
-    clicked = Signal()
-
-    def mousePressEvent(self, event):
-        pixmap = self.pixmap()
-        if event.button() == Qt.MouseButton.LeftButton and pixmap is not None and not pixmap.isNull():
-            self.clicked.emit()
-        super().mousePressEvent(event)
-
-    def keyPressEvent(self, event):
-        pixmap = self.pixmap()
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and pixmap is not None and not pixmap.isNull():
-            self.clicked.emit()
-            event.accept()
-            return
-        super().keyPressEvent(event)
-
-
-class FormatSelector(QWidget):
-    """Compact exclusive buttons with the small QComboBox API used by the window."""
-
-    FORMATS = ("epub", "txt", "html")
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        self.group = QButtonGroup(self)
-        self.group.setExclusive(True)
-        self.buttons = []
-        for index, value in enumerate(self.FORMATS):
-            button = QPushButton(value.upper())
-            button.setObjectName("formatButton")
-            button.setCheckable(True)
-            button.setAccessibleName(f"Формат {value.upper()}")
-            self.group.addButton(button, index)
-            self.buttons.append(button)
-            layout.addWidget(button, 1)
-        self.buttons[0].setChecked(True)
-
-    def currentText(self):
-        checked = self.group.checkedId()
-        return self.FORMATS[checked] if checked >= 0 else self.FORMATS[0]
-
-    def currentIndex(self):
-        checked = self.group.checkedId()
-        return checked if checked >= 0 else 0
-
-    def findText(self, value):
-        try:
-            return self.FORMATS.index(str(value).lower())
-        except ValueError:
-            return -1
-
-    def setCurrentIndex(self, index):
-        if 0 <= index < len(self.buttons):
-            self.buttons[index].setChecked(True)
-
-
-def lookup(task, reference, token):
-    with Downloader(token=token) as downloader:
-        book = downloader.get_book(reference)
-    cover = None
-    try:
-        url = getattr(book._plan.title, "cover_url", None)
-        if url:
-            cover, _ = download_cover(url)
-    except Exception:
-        log.info("Cover unavailable", exc_info=True)
-    return book, cover
-
-
-def verify_token(task, token):
-    with LibSocialClient(token) as client:
-        user = client.get_current_user()
-    return user["username"]
-
-def check_latest_release(task, current_version):
-    response = httpx.get(
-        RELEASES_API,
-        headers={"Accept": "application/vnd.github+json"},
-        timeout=5,
-    )
-    response.raise_for_status()
-
-    release = response.json()
-    latest = Version(release["tag_name"].removeprefix("v"))
-    current = Version(current_version)
-
-    if latest <= current:
-        return None
-
-    return {
-        "version": str(latest),
-        "url": release["html_url"],
-        "notes": release.get("body", ""),
-    }
-
-
-class DownloadCancelled(Exception):
-    def __str__(self):
-        return "CANCELLED: download interrupted"
-
-
-def perform_download(task, book, branch, fmt, start_id, end_id, path, cache, token):
-    def check_cancel(*_):
-        if task.cancel.is_set():
-            raise DownloadCancelled()
-
-    def progress(current, total, chapter):
-        check_cancel()
-        task.progress.emit(current, total, chapter)
-
-    check_cancel()
-    with Downloader(token=token) as downloader:
-        return downloader.download(
-            book, branch_id=branch, format=fmt, output=path,
-            chapter_start_id=start_id, chapter_end_id=end_id,
-            cache_dir=cache, resume=True,
-            progress=progress, status=check_cancel,
-        )
-
-
-class Window(QMainWindow):
-    def __init__(self, check_update_on_startup: bool = True):
+    def __init__(self, check_update_on_startup=True):
         super().__init__()
         self.store = Store()
         configure_logging(self.store.root)
         self.token_store = KeyringTokenStorage()
+
+        # Shared page state.
         self.book = None
         self.cover_pixmap = None
         self.cover_available = False
@@ -200,442 +69,53 @@ class Window(QMainWindow):
         self.repeat_record = None
         self.lookup_pending = False
         self.running = False
+
+        # Worker and lifecycle state.
         self.threads = []
         self.tasks = []
         self.exiting = False
+
         self.setWindowTitle("Ranobe Downloader")
         self.resize(980, 700)
         self.setMinimumSize(840, 700)
         self.setAcceptDrops(True)
+        self._build_shell()
+        self.build_download_page()
+        self.build_history_page()
+        self.build_settings_page()
+        self._build_tray()
+        self._initialize_pages(check_update_on_startup)
 
+    def _build_shell(self):
         wrapper = QWidget()
         wrapper.setObjectName("appShell")
-        main = QVBoxLayout(wrapper)
-        main.setContentsMargins(28, 22, 28, 22)
-        main.setSpacing(18)
+        layout = QVBoxLayout(wrapper)
+        layout.setContentsMargins(28, 22, 28, 22)
+        layout.setSpacing(18)
+
         header = QHBoxLayout()
         header.setSpacing(12)
         brand = QVBoxLayout()
         brand.setSpacing(1)
-        brand_title = QLabel("Ranobe Downloader")
-        brand_title.setObjectName("brandTitle")
-        brand_subtitle = QLabel("Личная библиотека — в удобном формате")
-        brand_subtitle.setObjectName("mutedText")
-        brand.addWidget(brand_title)
-        brand.addWidget(brand_subtitle)
+        title = QLabel("Ranobe Downloader")
+        title.setObjectName("brandTitle")
+        subtitle = QLabel("Личная библиотека — в удобном формате")
+        subtitle.setObjectName("mutedText")
+        brand.addWidget(title)
+        brand.addWidget(subtitle)
         header.addLayout(brand)
         header.addStretch()
         self.username = QLabel("Не авторизован")
         self.username.setObjectName("accountBadge")
         header.addWidget(self.username)
-        main.addLayout(header)
+        layout.addLayout(header)
+
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
-        main.addWidget(self.tabs)
+        layout.addWidget(self.tabs)
         self.setCentralWidget(wrapper)
 
-        download = QWidget()
-        download.setObjectName("downloadPage")
-        download_layout = QVBoxLayout(download)
-        download_layout.setContentsMargins(8, 18, 8, 8)
-        download_layout.setSpacing(14)
-
-        page_title = QLabel("Скачать произведение")
-        page_title.setObjectName("pageTitle")
-        page_hint = QLabel("Вставьте ссылку с RanobeLib — перевод, главы и обложка загрузятся автоматически.")
-        page_hint.setObjectName("mutedText")
-        page_hint.setWordWrap(True)
-        download_layout.addWidget(page_title)
-        download_layout.addWidget(page_hint)
-
-        search_card = QFrame()
-        search_card.setObjectName("card")
-        search_layout = QHBoxLayout(search_card)
-        search_layout.setContentsMargins(16, 14, 16, 14)
-        search_layout.setSpacing(10)
-        self.reference = QLineEdit()
-        self.reference.setPlaceholderText("https://ranobelib.me/ru/book/…")
-        self.reference.setClearButtonEnabled(True)
-        self.reference.returnPressed.connect(self.find_book)
-        search_layout.addWidget(self.reference, 1)
-        self.lookup_progress = QProgressBar()
-        self.lookup_progress.setRange(0, 0)
-        self.lookup_progress.setTextVisible(False)
-        self.lookup_progress.setFixedSize(48, 7)
-        self.lookup_progress.hide()
-        search_layout.addWidget(self.lookup_progress)
-        find = self.find_button = QPushButton("Найти")
-        find.setObjectName("secondaryButton")
-        find.setMinimumWidth(104)
-        find.clicked.connect(self.find_book)
-        search_layout.addWidget(find)
-        download_layout.addWidget(search_card)
-
-        details_card = QFrame()
-        details_card.setObjectName("card")
-        details_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        details_card.setMaximumHeight(310)
-        details_layout = QHBoxLayout(details_card)
-        details_layout.setContentsMargins(18, 18, 18, 18)
-        details_layout.setSpacing(22)
-
-        cover_column = QVBoxLayout()
-        cover_column.setSpacing(9)
-        cover_column.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.cover = CoverLabel("Обложка\nпоявится после поиска")
-        self.cover.setObjectName("coverPlaceholder")
-        self.cover.setFixedSize(142, 198)
-        self.cover.setWordWrap(True)
-        self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cover.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.cover.setAccessibleName("Обложка произведения")
-        self.cover.clicked.connect(self.show_cover_preview)
-        cover_column.addWidget(self.cover, 0, Qt.AlignmentFlag.AlignHCenter)
-        cover_note = QLabel("EPUB · TXT · HTML")
-        cover_note.setObjectName("formatBadge")
-        cover_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cover_column.addWidget(cover_note)
-        details_layout.addLayout(cover_column)
-
-        options = QVBoxLayout()
-        options.setSpacing(7)
-        self.title_label = QLabel("Выберите произведение")
-        self.title_label.setObjectName("bookTitle")
-        self.title_label.setWordWrap(True)
-        options.addWidget(self.title_label)
-        self.book_details = QLabel()
-        self.book_details.setObjectName("bookMeta")
-        self.book_details.setWordWrap(True)
-        self.book_details.hide()
-        options.addWidget(self.book_details)
-
-        fields = QGridLayout()
-        fields.setHorizontalSpacing(12)
-        fields.setVerticalSpacing(4)
-        fields.setColumnStretch(0, 1)
-        fields.setColumnStretch(1, 1)
-
-        translation_label = QLabel("Перевод")
-        translation_label.setObjectName("fieldLabel")
-        self.translation = QComboBox()
-        self.translation.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.translation.currentIndexChanged.connect(self.translation_changed)
-        fields.addWidget(translation_label, 0, 0, 1, 2)
-        fields.addWidget(self.translation, 1, 0, 1, 2)
-
-        scope_label = QLabel("Главы")
-        scope_label.setObjectName("fieldLabel")
-        format_label = QLabel("Формат")
-        format_label.setObjectName("fieldLabel")
-        self.scope = QComboBox()
-        self.scope.addItems(["Все главы", "Первые 10", "Последние 10", "Диапазон"])
-        self.scope.currentIndexChanged.connect(self.update_scope)
-        self.fmt = FormatSelector()
-        fields.addWidget(scope_label, 2, 0)
-        fields.addWidget(format_label, 2, 1)
-        fields.addWidget(self.scope, 3, 0)
-        fields.addWidget(self.fmt, 3, 1)
-
-        range_label = QLabel("Диапазон")
-        range_label.setObjectName("fieldLabel")
-        range_row = QHBoxLayout()
-        range_row.setSpacing(8)
-        self.start = QComboBox()
-        self.end = QComboBox()
-        range_row.addWidget(self.start)
-        range_separator = QLabel("—")
-        range_separator.setObjectName("mutedText")
-        range_row.addWidget(range_separator)
-        range_row.addWidget(self.end)
-        fields.addWidget(range_label, 4, 0, 1, 2)
-        fields.addLayout(range_row, 5, 0, 1, 2)
-        options.addLayout(fields)
-
-        self.add_button = QPushButton("В очередь")
-        self.add_button.setObjectName("primaryButton")
-        self.add_button.setMinimumHeight(42)
-        self.add_button.clicked.connect(self.enqueue)
-        options.addWidget(self.add_button)
-        details_layout.addLayout(options, 1)
-        download_layout.addWidget(details_card)
-
-        status_card = QFrame()
-        status_card.setObjectName("statusCard")
-        status_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        status_layout = QVBoxLayout(status_card)
-        status_layout.setContentsMargins(16, 12, 16, 12)
-        status_layout.setSpacing(7)
-        status_header = QHBoxLayout()
-        status_title = QLabel("Состояние")
-        status_title.setObjectName("fieldLabel")
-        self.queue_status = QLabel("Очередь пуста")
-        self.queue_status.setObjectName("mutedText")
-        self.progress = QProgressBar()
-        self.progress.setTextVisible(False)
-        self.status = QLabel("Готово")
-        self.status.setObjectName("statusText")
-        status_header.addWidget(status_title)
-        status_header.addWidget(self.queue_status)
-        status_header.addStretch()
-        status_header.addWidget(self.status)
-        self.cancel_button = QPushButton("Отменить загрузку")
-        self.cancel_button.setObjectName("compactButton")
-        self.cancel_button.clicked.connect(self.cancel_current)
-        self.clear_queue_button = QPushButton("Очистить ожидающие")
-        self.clear_queue_button.setObjectName("compactButton")
-        self.clear_queue_button.clicked.connect(self.clear_pending)
-        status_header.addWidget(self.cancel_button)
-        status_header.addWidget(self.clear_queue_button)
-        status_layout.addLayout(status_header)
-        status_layout.addWidget(self.progress)
-        download_layout.addWidget(status_card)
-        download_layout.addStretch(1)
-        self.tabs.addTab(download, "Скачать")
-
-        history_page = QWidget()
-        history_page.setObjectName("historyPage")
-        history_layout = QVBoxLayout(history_page)
-        history_layout.setContentsMargins(8, 18, 8, 8)
-        history_layout.setSpacing(14)
-
-        history_title = QLabel("История загрузок")
-        history_title.setObjectName("pageTitle")
-        history_hint = QLabel("Здесь хранятся готовые книги. Выберите запись, чтобы открыть или скачать её снова.")
-        history_hint.setObjectName("mutedText")
-        history_hint.setWordWrap(True)
-        history_layout.addWidget(history_title)
-        history_layout.addWidget(history_hint)
-
-        history_search_card = QFrame()
-        history_search_card.setObjectName("card")
-        history_search_layout = QHBoxLayout(history_search_card)
-        history_search_layout.setContentsMargins(16, 14, 16, 14)
-        history_search_layout.setSpacing(10)
-        self.history_filter = QLineEdit()
-        self.history_filter.setPlaceholderText("Поиск по названию или формату")
-        self.history_filter.setClearButtonEnabled(True)
-        self.history_filter.textChanged.connect(self.reload_history)
-        history_search_layout.addWidget(self.history_filter, 1)
-        self.history_count = QLabel("0 файлов")
-        self.history_count.setObjectName("accountBadge")
-        history_search_layout.addWidget(self.history_count)
-        history_layout.addWidget(history_search_card)
-
-        history_card = QFrame()
-        history_card.setObjectName("card")
-        history_card_layout = QVBoxLayout(history_card)
-        history_card_layout.setContentsMargins(1, 1, 1, 1)
-        history_card_layout.setSpacing(0)
-
-        self.history_empty = QWidget()
-        empty_layout = QVBoxLayout(self.history_empty)
-        empty_layout.setContentsMargins(24, 48, 24, 48)
-        empty_layout.setSpacing(7)
-        empty_layout.addStretch()
-        self.history_empty_title = QLabel("История пока пуста")
-        self.history_empty_title.setObjectName("emptyTitle")
-        self.history_empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.history_empty_hint = QLabel("Скачанные книги появятся здесь автоматически.")
-        self.history_empty_hint.setObjectName("mutedText")
-        self.history_empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.history_empty_hint.setWordWrap(True)
-        empty_layout.addWidget(self.history_empty_title)
-        empty_layout.addWidget(self.history_empty_hint)
-        empty_layout.addStretch()
-        history_card_layout.addWidget(self.history_empty, 1)
-
-        self.history = QTableWidget(0, 4)
-        self.history.setHorizontalHeaderLabels(["Название", "Формат", "Дата", "Размер"])
-        history_header = self.history.horizontalHeader()
-        history_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for column in (1, 2, 3):
-            history_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        self.history.verticalHeader().setVisible(False)
-        self.history.setShowGrid(False)
-        self.history.setAlternatingRowColors(True)
-        self.history.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.history.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.history.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.history.cellDoubleClicked.connect(self.open_history)
-        self.history.itemSelectionChanged.connect(self.update_history_actions)
-        history_card_layout.addWidget(self.history, 1)
-        history_layout.addWidget(history_card, 1)
-
-        self.history_actions = QFrame()
-        self.history_actions.setObjectName("statusCard")
-        controls = QHBoxLayout(self.history_actions)
-        controls.setContentsMargins(12, 9, 12, 9)
-        controls.setSpacing(8)
-        selected_hint = QLabel("Выбрана книга")
-        selected_hint.setObjectName("mutedText")
-        controls.addWidget(selected_hint)
-        controls.addStretch()
-        self.history_open_button = QPushButton("Открыть")
-        self.history_open_button.setObjectName("primaryButton")
-        self.history_open_button.clicked.connect(self.open_selected_history)
-        controls.addWidget(self.history_open_button)
-        self.history_folder_button = QPushButton("Показать в папке")
-        self.history_folder_button.clicked.connect(self.open_history_folder)
-        controls.addWidget(self.history_folder_button)
-        self.history_repeat_button = QPushButton("Скачать снова")
-        self.history_repeat_button.clicked.connect(self.redownload_history)
-        controls.addWidget(self.history_repeat_button)
-        self.history_delete_button = QPushButton("Удалить из истории")
-        self.history_delete_button.setObjectName("dangerButton")
-        self.history_delete_button.clicked.connect(self.delete_history_record)
-        controls.addWidget(self.history_delete_button)
-        self.history_actions.hide()
-        history_layout.addWidget(self.history_actions)
-        self.tabs.addTab(history_page, "История")
-
-        settings_page = QWidget()
-        settings_page.setObjectName("settingsPage")
-        settings_layout = QVBoxLayout(settings_page)
-        settings_layout.setContentsMargins(8, 18, 8, 8)
-        settings_layout.setSpacing(14)
-
-        settings_title = QLabel("Настройки")
-        settings_title.setObjectName("pageTitle")
-        settings_hint = QLabel("Управляйте сохранением книг, оформлением, авторизацией и обслуживанием приложения.")
-        settings_hint.setObjectName("mutedText")
-        settings_hint.setWordWrap(True)
-        settings_layout.addWidget(settings_title)
-        settings_layout.addWidget(settings_hint)
-
-        self.settings_scroll = QScrollArea()
-        self.settings_scroll.setObjectName("settingsScroll")
-        self.settings_scroll.setWidgetResizable(True)
-        self.settings_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.settings_scroll.viewport().setAutoFillBackground(False)
-        settings_content = QWidget()
-        settings_content.setObjectName("settingsContent")
-        settings_cards_layout = QVBoxLayout(settings_content)
-        settings_cards_layout.setContentsMargins(0, 0, 6, 0)
-        settings_cards_layout.setSpacing(12)
-        self.settings_cards = []
-
-        def create_settings_card(title, description):
-            card = QFrame()
-            card.setObjectName("card")
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(18, 16, 18, 16)
-            card_layout.setSpacing(10)
-            heading = QLabel(title)
-            heading.setObjectName("sectionTitle")
-            note = QLabel(description)
-            note.setObjectName("mutedText")
-            note.setWordWrap(True)
-            card_layout.addWidget(heading)
-            card_layout.addWidget(note)
-            self.settings_cards.append(card)
-            settings_cards_layout.addWidget(card)
-            return card_layout
-
-        downloads_layout = create_settings_card(
-            "Загрузки",
-            "Выберите папку для готовых книг и управляйте временными файлами.",
-        )
-        directory_label = QLabel("Папка загрузок")
-        directory_label.setObjectName("fieldLabel")
-        downloads_layout.addWidget(directory_label)
-        self.directory = QLineEdit(self.store.settings.get("directory", ""))
-        browse = QPushButton("Обзор…")
-        browse.clicked.connect(self.choose_dir)
-        directory_row = QHBoxLayout()
-        directory_row.addWidget(self.directory)
-        directory_row.addWidget(browse)
-        downloads_layout.addLayout(directory_row)
-        self.directory.editingFinished.connect(self.save_dir)
-
-        cache_row = QHBoxLayout()
-        cache_info = QVBoxLayout()
-        cache_info.setSpacing(2)
-        cache_label = QLabel("Кеш глав и изображений")
-        cache_label.setObjectName("fieldLabel")
-        cache_path = QLabel(str(self.store.cache))
-        cache_path.setObjectName("mutedText")
-        cache_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        cache_info.addWidget(cache_label)
-        cache_info.addWidget(cache_path)
-        cache_row.addLayout(cache_info, 1)
-        clear = QPushButton("Очистить кеш")
-        clear.clicked.connect(self.clear_cache)
-        cache_row.addWidget(clear)
-        downloads_layout.addLayout(cache_row)
-
-        appearance_layout = create_settings_card(
-            "Оформление",
-            "Системная тема автоматически следует настройкам операционной системы.",
-        )
-        appearance_row = QHBoxLayout()
-        theme_label = QLabel("Тема приложения")
-        theme_label.setObjectName("fieldLabel")
-        appearance_row.addWidget(theme_label)
-        appearance_row.addStretch()
-        self.theme_box = QComboBox()
-        self.theme_box.addItems(["Системная", "Светлая", "Тёмная"])
-        self.theme_box.setMinimumWidth(200)
-        self.theme_box.setCurrentIndex({"system": 0, "light": 1, "dark": 2}.get(self.store.settings.get("theme", "system"), 0))
-        self.theme_box.currentIndexChanged.connect(self.change_theme)
-        appearance_row.addWidget(self.theme_box)
-        appearance_layout.addLayout(appearance_row)
-
-        account_layout = create_settings_card(
-            "Авторизация",
-            "Токен сохраняется в системном хранилище учётных данных и нужен только для доступных вам материалов.",
-        )
-        token_label = QLabel("Bearer-токен RanobeLib")
-        token_label.setObjectName("fieldLabel")
-        account_layout.addWidget(token_label)
-        self.token_input = QLineEdit()
-        self.token_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.token_input.setPlaceholderText("Bearer token")
-        self.token_input.returnPressed.connect(self.login)
-        account_layout.addWidget(self.token_input)
-        auth_row = QHBoxLayout()
-        auth_row.addStretch()
-        connect = QPushButton("Войти")
-        connect.setObjectName("primaryButton")
-        connect.clicked.connect(self.login)
-        logout = QPushButton("Выйти")
-        logout.clicked.connect(self.logout)
-        auth_row.addWidget(connect)
-        auth_row.addWidget(logout)
-        account_layout.addLayout(auth_row)
-
-        application_layout = create_settings_card(
-            "Приложение",
-            "Проверяйте обновления и открывайте журнал при диагностике проблем.",
-        )
-        current_version = importlib.metadata.version("ranobe-downloader")
-        link = QLabel(f'Версия {current_version} · <a href="{GITHUB}">GitHub SayatYuss</a>')
-        link.setOpenExternalLinks(True)
-        application_layout.addWidget(link)
-        application_actions = QHBoxLayout()
-        application_actions.addStretch()
-        self.check_updates_button = QPushButton("Проверить обновления")
-        self.check_updates_button.clicked.connect(
-            lambda: self.run_task(
-                check_latest_release,
-                current_version,
-                on_done=lambda release: self.show_update(release, show_latest=True),
-                on_failure=lambda error: log.warning(
-                    "Update check failed: %s", error
-                ),
-                busy=False,
-            )
-        )
-        application_actions.addWidget(self.check_updates_button)
-        log_button = QPushButton("Открыть журнал")
-        log_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root / "desktop.log"))))
-        application_actions.addWidget(log_button)
-        application_layout.addLayout(application_actions)
-
-        settings_cards_layout.addStretch(1)
-        self.settings_scroll.setWidget(settings_content)
-        settings_layout.addWidget(self.settings_scroll, 1)
-        self.tabs.addTab(settings_page, "Настройки")
-
+    def _build_tray(self):
         self.tray = QSystemTrayIcon(self)
         self.tray.setIcon(QIcon("docs-site/assets/favicon.svg"))
         self.tray.setToolTip("Ranobe Downloader")
@@ -650,26 +130,26 @@ class Window(QMainWindow):
         self.tray.activated.connect(self.tray_activated)
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray.show()
+
+    def _initialize_pages(self, check_update_on_startup):
         self.reload_history()
         self.update_scope()
         self.update_queue()
         self.set_book_controls_enabled(False)
-        if self.token_store.load():
-            self.run_task(verify_token, self.token_store.load(), on_done=self.set_user, busy=False)
-        
-        
+        token = self.token_store.load()
+        if token:
+            self.run_task(verify_token, token, on_done=self.set_user, busy=False)
         if check_update_on_startup:
             self.run_task(
                 check_latest_release,
-                current_version,
+                self.current_version,
                 on_done=self.show_update,
-                on_failure=lambda error: log.warning(
-                    "Update check failed: %s", error
-                ),
+                on_failure=lambda error: log.warning("Update check failed: %s", error),
                 busy=False,
             )
 
     def run_task(self, operation, *args, on_done, busy=True, on_failure=None):
+        """Run a blocking operation and deliver its result on the GUI thread."""
         thread = QThread(self)
         task = Task(operation, *args)
         task.moveToThread(thread)
@@ -686,10 +166,11 @@ class Window(QMainWindow):
         self.threads.append(thread)
         if operation == perform_download:
             self.current_task = task
-        self.tasks.append(task)
-        thread.finished.connect(lambda: self.threads.remove(thread) if thread in self.threads else None)
-        if operation == perform_download:
             task.progress.connect(self.on_progress)
+        self.tasks.append(task)
+        thread.finished.connect(
+            lambda: self.threads.remove(thread) if thread in self.threads else None
+        )
         thread.start()
         self.update_queue()
 
@@ -705,456 +186,6 @@ class Window(QMainWindow):
         self.status.setText("Ошибка: " + message)
         QMessageBox.warning(self, "Ошибка", message)
 
-    def set_book_controls_enabled(self, enabled):
-        for widget in (self.translation, self.scope, self.fmt, self.add_button):
-            widget.setEnabled(enabled)
-        self.update_scope()
-
-    def set_lookup_busy(self, busy):
-        self.lookup_pending = busy
-        self.find_button.setEnabled(not busy)
-        self.find_button.setText("Поиск…" if busy else "Найти")
-        self.lookup_progress.setVisible(busy)
-        self.set_book_controls_enabled(not busy and self.book is not None)
-
-    def find_book(self):
-        reference = self.reference.text().strip()
-        if not reference or self.lookup_pending:
-            return
-        self.set_lookup_busy(True)
-        self.status.setText("Загрузка данных…")
-        self.run_task(lookup, reference, self.token_store.load(), on_done=self.book_loaded, on_failure=self.lookup_failed)
-
-    def lookup_failed(self, message):
-        self.set_lookup_busy(False)
-        self.repeat_record = None
-        self.report_error(message)
-
-    def book_loaded(self, result):
-        self.book, cover = result
-        self.set_lookup_busy(False)
-        self.scope.setCurrentIndex(0)
-        self.title_label.setText(self.book.title)
-        self.cover_pixmap = None
-        self.cover_available = False
-        self.cover.clear()
-        cover_loaded = False
-        if cover:
-            pixmap = QPixmap()
-            if pixmap.loadFromData(cover):
-                self.cover_pixmap = pixmap
-                self.cover.setPixmap(pixmap.scaled(self.cover.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-                self.cover.setObjectName("coverPreview")
-                self.cover.setCursor(Qt.CursorShape.PointingHandCursor)
-                self.cover.setToolTip("Нажмите, чтобы увеличить обложку")
-                self.cover_available = True
-                cover_loaded = True
-        if not cover_loaded:
-            self.cover.setObjectName("coverPlaceholder")
-            self.cover.unsetCursor()
-            self.cover.setToolTip("")
-            self.cover.setText("Обложка\nнедоступна")
-        self.cover.style().unpolish(self.cover)
-        self.cover.style().polish(self.cover)
-        self.translation.blockSignals(True)
-        self.translation.clear()
-        self.translation_ids = [t.branch_id for t in self.book.translations]
-        for t in self.book.translations:
-            self.translation.addItem(f"{t.name or 'Перевод'} ({t.chapter_count})")
-        if not self.translation_ids:
-            self.translation_ids = [None]
-            self.translation.addItem("Без выбора перевода")
-        self.translation.blockSignals(False)
-        self.translation_changed()
-        self.book_details.show()
-        self.update_book_details()
-        self.status.setText("Готово")
-        if self.repeat_record is not None:
-            self.apply_repeat_selection()
-
-    def show_cover_preview(self):
-        if self.cover_pixmap is None or self.cover_pixmap.isNull():
-            return
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"Обложка — {self.book.title if self.book else 'Ranobe Downloader'}")
-        dialog.setModal(True)
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(12)
-        preview = QLabel()
-        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        available = self.screen().availableGeometry()
-        preview_width = min(560, round(available.width() * 0.7))
-        preview_height = min(720, round(available.height() * 0.75))
-        preview.setPixmap(self.cover_pixmap.scaled(
-            preview_width, preview_height,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        ))
-        layout.addWidget(preview)
-        close = QPushButton("Закрыть")
-        close.clicked.connect(dialog.accept)
-        layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
-        dialog.exec()
-
-    def apply_repeat_selection(self):
-        record = self.repeat_record
-        self.repeat_record = None
-        branch = record.get("branch_id")
-        if branch is not None and branch not in self.translation_ids:
-            QMessageBox.warning(self, "Повторить", "Сохранённый перевод больше недоступен")
-            return
-        if branch in self.translation_ids:
-            self.translation.setCurrentIndex(self.translation_ids.index(branch))
-        start, end = record.get("start_id"), record.get("end_id")
-        if any(value is not None and self.start.findData(value) < 0 for value in (start, end)):
-            QMessageBox.warning(self, "Повторить", "Сохранённый диапазон больше недоступен")
-            return
-        self.scope.setCurrentIndex(0)
-        if start is not None or end is not None:
-            self.scope.setCurrentIndex(3)
-            if start is not None:
-                index = self.start.findData(start)
-                if index >= 0:
-                    self.start.setCurrentIndex(index)
-            if end is not None:
-                index = self.end.findData(end)
-                if index >= 0:
-                    self.end.setCurrentIndex(index)
-        fmt = record.get("format", "epub")
-        pos = self.fmt.findText(fmt)
-        if pos >= 0:
-            self.fmt.setCurrentIndex(pos)
-        self.enqueue()
-
-    def translation_changed(self):
-        if not self.book:
-            return
-        i = self.translation.currentIndex()
-        if i < 0:
-            return
-        self.chapters = self.book.list_chapters(self.translation_ids[i])
-        for widget in (self.start, self.end):
-            widget.clear()
-            for ch in self.chapters:
-                widget.addItem(f"Том {ch['volume']}, глава {ch['number']}: {ch['name'] or ''}", ch["id"])
-        if self.chapters:
-            self.end.setCurrentIndex(len(self.chapters) - 1)
-        self.update_book_details()
-        self.update_scope()
-
-    def update_book_details(self):
-        if not self.book:
-            self.book_details.hide()
-            return
-        authors = ", ".join(getattr(self.book, "authors", ()) or ()) or "не указан"
-        chapter_count = getattr(self.book, "chapter_count", len(self.chapters))
-        translation = "не выбран"
-        index = self.translation.currentIndex()
-        translations = getattr(self.book, "translations", ())
-        if 0 <= index < len(translations):
-            translation = translations[index].name or "без названия"
-        elif not translations:
-            translation = "единственный"
-        cover_status = "доступна" if self.cover_available else "недоступна"
-        self.book_details.setText(
-            f"Автор: {authors}  ·  Глав: {chapter_count}  ·  "
-            f"Перевод: {translation}  ·  Обложка: {cover_status}"
-        )
-        self.book_details.setToolTip(self.book_details.text())
-
-    def update_scope(self):
-        enabled = self.book is not None and not self.lookup_pending and self.scope.currentIndex() == 3
-        self.start.setEnabled(enabled)
-        self.end.setEnabled(enabled)
-
-    def enqueue(self):
-        if self.lookup_pending or not self.book or not self.chapters:
-            QMessageBox.warning(self, "Главы", "Не выбраны главы")
-            return
-        branch = self.translation_ids[self.translation.currentIndex()]
-        mode = self.scope.currentIndex()
-        start = end = None
-        if mode == 1:
-            end = self.chapters[min(9, len(self.chapters) - 1)]["id"]
-        elif mode == 2:
-            start = self.chapters[max(0, len(self.chapters) - 10)]["id"]
-        elif mode == 3:
-            if self.start.currentIndex() > self.end.currentIndex():
-                QMessageBox.warning(self, "Диапазон", "Начало позже конца")
-                return
-            start, end = self.start.currentData(), self.end.currentData()
-        directory = Path(self.directory.text()).expanduser()
-        directory.mkdir(parents=True, exist_ok=True)
-        fmt = self.fmt.currentText()
-        base = directory / f"{self.book.slug_url}_{branch if branch is not None else 'default'}.{fmt}"
-        path = base
-        number = 1
-        while path.exists() or path in self.active_paths or any(item[5] == path for item in self.pending):
-            path = base.with_name(f"{base.stem}_{number}{base.suffix}")
-            number += 1
-        self.pending.append((self.book, branch, fmt, start, end, path))
-        self.update_queue()
-        self.run_next()
-
-    def update_queue(self):
-        waiting = len(self.pending)
-        if self.current:
-            title = self.current[0].title
-            suffix = f" · ожидают: {waiting}" if waiting else ""
-            self.queue_status.setText(f"Скачивается: {title}{suffix}")
-        elif waiting:
-            self.queue_status.setText(f"Ожидают загрузки: {waiting}")
-        else:
-            self.queue_status.setText("Очередь пуста")
-        has_current = self.current_task is not None
-        has_waiting = bool(self.pending)
-        self.cancel_button.setVisible(has_current)
-        self.cancel_button.setEnabled(has_current)
-        self.clear_queue_button.setVisible(has_waiting)
-        self.clear_queue_button.setEnabled(has_waiting)
-        self.add_button.setText("Добавить в очередь" if self.running else "Скачать")
-
-    def clear_pending(self):
-        self.pending.clear()
-        self.update_queue()
-
-    def cancel_current(self):
-        if self.current_task:
-            self.current_task.cancel.set()
-            self.status.setText("Отмена после текущей операции…")
-            self.queue_status.setText("Текущая загрузка отменяется…")
-            self.cancel_button.setEnabled(False)
-
-    def run_next(self):
-        if self.running or not self.pending:
-            self.update_queue()
-            return
-        book, branch, fmt, start, end, path = self.pending.popleft()
-        self.current = (book, branch, fmt, start, end, path)
-        self.active_paths.add(path)
-        self.running = True
-        self.progress.setValue(0)
-        self.status.setText(f"Скачивание: {book.title}")
-        self.update_queue()
-        def completed(saved):
-            self.running = False
-            self.current_task = None
-            self.current = None
-            self.active_paths.discard(path)
-            self.store.add_download(title=book.title, path=Path(saved), fmt=fmt, reference=book.slug_url, branch_id=branch, start_id=start, end_id=end)
-            self.reload_history()
-            self.status.setText(f"Сохранено: {saved}")
-            if self.tray.isVisible():
-                self.tray.showMessage("Ranobe Downloader", f"Загрузка завершена: {book.title}")
-            self.run_next()
-        def failed(message):
-            self.running = False
-            self.current_task = None
-            self.current = None
-            self.active_paths.discard(path)
-            if message.startswith("CANCELLED:"):
-                self.status.setText("Отменено")
-            else:
-                self.status.setText("Ошибка загрузки")
-                QMessageBox.warning(self, "Ошибка", message)
-            self.run_next()
-        self.run_task(perform_download, book, branch, fmt, start, end, path, self.store.cache,
-                      self.token_store.load(), on_done=completed, on_failure=failed)
-
-    def on_progress(self, current, total, chapter):
-        self.progress.setValue(round(current * 100 / total) if total else 0)
-        self.status.setText(f"{current}/{total} — {chapter}")
-
-    @staticmethod
-    def history_count_text(count):
-        tail = count % 100
-        if 11 <= tail <= 14:
-            word = "файлов"
-        elif count % 10 == 1:
-            word = "файл"
-        elif count % 10 in (2, 3, 4):
-            word = "файла"
-        else:
-            word = "файлов"
-        return f"{count} {word}"
-
-    def update_history_actions(self):
-        self.history_actions.setVisible(self.selected_history_index() is not None)
-
-    def reload_history(self):
-        query = self.history_filter.text().strip().casefold()
-        self.history_indices = [i for i, item in enumerate(self.store.history) if query in item.get("title", "").casefold() or query in item.get("format", "").casefold()]
-        self.history.clearSelection()
-        self.history.setCurrentCell(-1, -1)
-        self.history.setRowCount(len(self.history_indices))
-        for row, index in enumerate(self.history_indices):
-            record = self.store.history[index]
-            for col, key in enumerate(("title", "format", "date", "size")):
-                value = record.get(key, "")
-                if key == "size":
-                    size = int(value or 0)
-                    value = f"{size / 1048576:.1f} MiB" if size >= 1048576 else f"{size / 1024:.0f} KiB"
-                elif key == "date" and value:
-                    try:
-                        value = datetime.fromisoformat(str(value)).strftime("%d.%m.%Y · %H:%M")
-                    except ValueError:
-                        pass
-                elif key == "format":
-                    value = str(value).upper()
-                item = QTableWidgetItem(str(value))
-                if col == 0:
-                    item.setData(Qt.ItemDataRole.UserRole, record.get("path"))
-                    item.setToolTip(str(record.get("path", "")))
-                elif col in (1, 2):
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                elif col == 3:
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                if key == "format":
-                    font = item.font()
-                    font.setBold(True)
-                    item.setFont(font)
-                self.history.setItem(row, col, item)
-            self.history.setRowHeight(row, 44)
-
-        count = len(self.history_indices)
-        self.history_count.setText(self.history_count_text(count))
-        self.history.setVisible(bool(count))
-        self.history_empty.setVisible(not count)
-        if not count and query and self.store.history:
-            self.history_empty_title.setText("Ничего не найдено")
-            self.history_empty_hint.setText("Попробуйте изменить поисковый запрос.")
-        else:
-            self.history_empty_title.setText("История пока пуста")
-            self.history_empty_hint.setText("Скачанные книги появятся здесь автоматически.")
-        self.update_history_actions()
-
-    def open_history(self, row, _column):
-        item = self.history.item(row, 0)
-        if item:
-            path = Path(item.data(Qt.ItemDataRole.UserRole))
-            if path.exists():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-            else:
-                QMessageBox.information(self, "Файл", "Файл был перемещён или удалён")
-
-    def open_selected_history(self):
-        row = self.history.currentRow()
-        if row >= 0:
-            self.open_history(row, 0)
-
-    def selected_history_index(self):
-        row = self.history.currentRow()
-        return self.history_indices[row] if 0 <= row < len(self.history_indices) else None
-
-    def open_history_folder(self):
-        index = self.selected_history_index()
-        if index is not None:
-            path = Path(self.store.history[index]["path"]).parent
-            if path.exists():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-
-    def delete_history_record(self):
-        index = self.selected_history_index()
-        if index is not None:
-            del self.store.history[index]
-            self.store.save_history()
-            self.reload_history()
-
-    def redownload_history(self):
-        index = self.selected_history_index()
-        if index is not None:
-            record = self.store.history[index]
-            reference = record.get("reference")
-            if not reference:
-                QMessageBox.information(self, "Повторить", "Для старой записи не сохранена ссылка на произведение.")
-                return
-            self.repeat_record = dict(record)
-            self.reference.setText(reference)
-            self.tabs.setCurrentIndex(0)
-            self.find_book()
-
-    def change_theme(self):
-        mode = ("system", "light", "dark")[self.theme_box.currentIndex()]
-        self.store.settings["theme"] = mode
-        self.store.save_settings()
-        apply_theme(QApplication.instance(), mode)
-
-    def choose_dir(self):
-        path = QFileDialog.getExistingDirectory(self, "Папка загрузок", self.directory.text())
-        if path:
-            self.directory.setText(path)
-            self.save_dir()
-
-    def save_dir(self):
-        self.store.settings["directory"] = self.directory.text()
-        self.store.save_settings()
-
-    def clear_cache(self):
-        if self.running or self.pending:
-            QMessageBox.information(self, "Кеш", "Дождитесь завершения загрузок")
-            return
-        shutil.rmtree(self.store.cache, ignore_errors=True)
-        self.store.cache.mkdir(exist_ok=True)
-
-    def set_user(self, username):
-        self.username.setText(username)
-        self.token_input.clear()
-
-    def login(self):
-        token = self.token_input.text().strip()
-        if token.lower().startswith("bearer "):
-            token = token[7:].strip()
-        if not token:
-            return
-        def success(username):
-            self.token_store.save(token)
-            self.set_user(username)
-        self.run_task(verify_token, token, on_done=success)
-
-    def logout(self):
-        self.token_store.delete()
-        self.username.setText("Не авторизован")
-        self.token_input.clear()
-        
-    def show_update(self, release, show_latest: bool = False):
-        if not release:
-            if show_latest:
-                QMessageBox.information(
-                    self,
-                    "Обновления",
-                    "Установлена последняя версия."
-                )
-            return
-
-        version = html.escape(release["version"])
-        notes = html.escape(release["notes"]).replace("\n", "<br>")
-
-        message = f"""
-        <h3>Доступна новая версия {version}</h3>
-        <p>Что нового:</p>
-        {notes}
-        <br>
-        <p>
-            <a href="{html.escape(release['url'], quote=True)}">
-                Посмотреть полный список изменений
-            </a>
-        </p>
-        <br>
-        Открыть страницу загрузки?
-        """
-
-        answer = QMessageBox.question(
-            self,
-            "Доступно обновление",
-            message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-
-        if answer == QMessageBox.StandardButton.Yes:
-            QDesktopServices.openUrl(QUrl(release["url"]))
-
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls() or event.mimeData().hasText():
             event.acceptProposedAction()
@@ -1169,7 +200,10 @@ class Window(QMainWindow):
             event.acceptProposedAction()
 
     def tray_activated(self, reason):
-        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
             self.restore_from_tray()
 
     def restore_from_tray(self):
@@ -1182,14 +216,22 @@ class Window(QMainWindow):
             self.hide()
             event.ignore()
         elif self.running or self.pending or self.threads:
-            QMessageBox.information(self, "Загрузка", "Дождитесь завершения фоновых операций")
+            QMessageBox.information(
+                self,
+                "Загрузка",
+                "Дождитесь завершения фоновых операций",
+            )
             event.ignore()
         else:
             event.accept()
 
     def quit_app(self):
         if self.running or self.pending or self.threads:
-            QMessageBox.information(self, "Загрузка", "Дождитесь завершения фоновых операций")
+            QMessageBox.information(
+                self,
+                "Загрузка",
+                "Дождитесь завершения фоновых операций",
+            )
             return
         self.exiting = True
         self.tray.hide()
@@ -1198,8 +240,9 @@ class Window(QMainWindow):
 
 def main():
     if "--check" in sys.argv:
-        import PySide6
-        from ranobe_downloader import Downloader
+        import PySide6  # noqa: F401
+        from ranobe_downloader import Downloader  # noqa: F401
+
         return 0
     app = QApplication(sys.argv)
     app.setApplicationName("RanobeDownloader")
@@ -1212,4 +255,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

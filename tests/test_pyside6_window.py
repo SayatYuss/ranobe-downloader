@@ -9,6 +9,7 @@ from unittest.mock import patch
 class WindowSmokeTest(unittest.TestCase):
     def test_window_tabs_theme_queue_and_history(self):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtCore import QCoreApplication, QEvent
         from PySide6.QtWidgets import QApplication
         from interfaces.pyside6.app import Window
         owns_app = QApplication.instance() is None
@@ -30,6 +31,9 @@ class WindowSmokeTest(unittest.TestCase):
                 window.theme_box.setCurrentIndex(0)
                 window.exiting = True
                 window.close()
+                window.deleteLater()
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                app.processEvents()
         if owns_app:
             app.quit()
 
