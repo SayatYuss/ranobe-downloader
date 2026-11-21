@@ -128,13 +128,13 @@ class Downloader:
             self._backend.exporter = _EXPORTERS[format]()
             try:
                 return self._backend.download(
-                book._plan, output, branch_id=branch_id, limit=limit,
-                chapter_from=chapter_from, chapter_to=chapter_to,
-                chapter_start_id=chapter_start_id, chapter_end_id=chapter_end_id,
-                progress=progress, resume=resume, cache_dir=cache_dir,
-                delay=delay, retries=retries, status=status,
-                image_mode=image_mode, image_quality=image_quality,
-                image_max_width=image_max_width, statistics=statistics,
+                    book._plan, output, branch_id=branch_id, limit=limit,
+                    chapter_from=chapter_from, chapter_to=chapter_to,
+                    chapter_start_id=chapter_start_id, chapter_end_id=chapter_end_id,
+                    progress=progress, resume=resume, cache_dir=cache_dir,
+                    delay=delay, retries=retries, status=status,
+                    image_mode=image_mode, image_quality=image_quality,
+                    image_max_width=image_max_width, statistics=statistics,
                 )
             except httpx.HTTPError as exc:
                 raise translate_http_error(exc) from exc
