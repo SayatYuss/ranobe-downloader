@@ -207,6 +207,49 @@ class PolishTests(unittest.TestCase):
         self.assertTrue(self.window.login_button.isHidden())
         self.assertFalse(self.window.logout_button.isHidden())
 
+    def test_download_preferences_update_ui_and_store(self):
+        self.window.default_format_box.setCurrentIndex(
+            self.window.default_format_box.findData('html')
+        )
+        self.assertEqual(self.window.store.settings['default_format'], 'html')
+        self.assertEqual(self.window.fmt.currentText(), 'html')
+
+        self.assertFalse(self.window.image_quality.isEnabled())
+        self.assertFalse(self.window.image_max_width.isEnabled())
+        self.window.image_mode_box.setCurrentIndex(
+            self.window.image_mode_box.findData('optimized')
+        )
+        self.window.image_quality.setValue(72)
+        self.window.image_max_width.setValue(1280)
+        self.window.save_image_settings()
+
+        self.assertTrue(self.window.image_quality.isEnabled())
+        self.assertTrue(self.window.image_max_width.isEnabled())
+        self.assertEqual(self.window.store.settings['image_mode'], 'optimized')
+        self.assertEqual(self.window.store.settings['image_quality'], 72)
+        self.assertEqual(self.window.store.settings['image_max_width'], 1280)
+
+        restored = Store(Path(self.temp.name))
+        self.assertEqual(restored.settings['default_format'], 'html')
+        self.assertEqual(restored.settings['image_mode'], 'optimized')
+        self.assertEqual(restored.settings['image_quality'], 72)
+        self.assertEqual(restored.settings['image_max_width'], 1280)
+
+    def test_image_preferences_are_forwarded_to_downloader(self):
+        task = SimpleNamespace(cancel=Event(), progress=SimpleNamespace(emit=lambda *_: None))
+        with patch('interfaces.pyside6.tasks.Downloader') as downloader:
+            downloader.return_value.__enter__.return_value.download.return_value = Path('book.epub')
+            result = perform_download(
+                task, 'book', 7, 'epub', 1, 10, Path('book.epub'),
+                Path('cache'), None, 'optimized', 72, 1280,
+            )
+
+        self.assertEqual(result, Path('book.epub'))
+        kwargs = downloader.return_value.__enter__.return_value.download.call_args.kwargs
+        self.assertEqual(kwargs['image_mode'], 'optimized')
+        self.assertEqual(kwargs['image_quality'], 72)
+        self.assertEqual(kwargs['image_max_width'], 1280)
+
 
 if __name__ == '__main__':
     unittest.main()

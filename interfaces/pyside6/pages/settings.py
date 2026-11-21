@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -93,6 +94,23 @@ class SettingsPageMixin:
         directory_row.addWidget(browse)
         downloads.addLayout(directory_row)
 
+        format_row = QHBoxLayout()
+        default_format_label = QLabel("Формат по умолчанию")
+        default_format_label.setObjectName("fieldLabel")
+        format_row.addWidget(default_format_label)
+        format_row.addStretch()
+        self.default_format_box = QComboBox()
+        for label, value in (("EPUB", "epub"), ("TXT", "txt"), ("HTML", "html")):
+            self.default_format_box.addItem(label, value)
+        default_index = self.default_format_box.findData(
+            self.store.settings.get("default_format", "epub")
+        )
+        self.default_format_box.setCurrentIndex(max(0, default_index))
+        self.default_format_box.setMinimumWidth(200)
+        self.default_format_box.currentIndexChanged.connect(self.save_default_format)
+        format_row.addWidget(self.default_format_box)
+        downloads.addLayout(format_row)
+
         cache_row = QHBoxLayout()
         cache_info = QVBoxLayout()
         cache_info.setSpacing(2)
@@ -111,6 +129,55 @@ class SettingsPageMixin:
         clear.clicked.connect(self.clear_cache)
         cache_row.addWidget(clear)
         downloads.addLayout(cache_row)
+
+        images = create_card(
+            "Изображения",
+            "Оригиналы сохраняются без изменений. Оптимизация уменьшает размер итоговой книги.",
+        )
+        mode_row = QHBoxLayout()
+        mode_label = QLabel("Режим")
+        mode_label.setObjectName("fieldLabel")
+        mode_row.addWidget(mode_label)
+        mode_row.addStretch()
+        self.image_mode_box = QComboBox()
+        self.image_mode_box.addItem("Оригиналы", "original")
+        self.image_mode_box.addItem("Оптимизированные", "optimized")
+        mode_index = self.image_mode_box.findData(self.store.settings.get("image_mode", "original"))
+        self.image_mode_box.setCurrentIndex(max(0, mode_index))
+        self.image_mode_box.setMinimumWidth(200)
+        mode_row.addWidget(self.image_mode_box)
+        images.addLayout(mode_row)
+
+        quality_row = QHBoxLayout()
+        quality_label = QLabel("Качество JPEG/WebP")
+        quality_label.setObjectName("fieldLabel")
+        quality_row.addWidget(quality_label)
+        quality_row.addStretch()
+        self.image_quality = QSpinBox()
+        self.image_quality.setRange(1, 100)
+        self.image_quality.setSuffix(" %")
+        self.image_quality.setValue(self.store.settings.get("image_quality", 85))
+        self.image_quality.setMinimumWidth(120)
+        quality_row.addWidget(self.image_quality)
+        images.addLayout(quality_row)
+
+        width_row = QHBoxLayout()
+        width_label = QLabel("Максимальная ширина")
+        width_label.setObjectName("fieldLabel")
+        width_row.addWidget(width_label)
+        width_row.addStretch()
+        self.image_max_width = QSpinBox()
+        self.image_max_width.setRange(320, 4096)
+        self.image_max_width.setSingleStep(160)
+        self.image_max_width.setSuffix(" px")
+        self.image_max_width.setValue(self.store.settings.get("image_max_width", 1600))
+        self.image_max_width.setMinimumWidth(120)
+        width_row.addWidget(self.image_max_width)
+        images.addLayout(width_row)
+        self.image_mode_box.currentIndexChanged.connect(self.image_settings_changed)
+        self.image_quality.editingFinished.connect(self.save_image_settings)
+        self.image_max_width.editingFinished.connect(self.save_image_settings)
+        self.update_image_controls()
 
         appearance = create_card(
             "Оформление",
@@ -209,6 +276,29 @@ class SettingsPageMixin:
 
     def save_dir(self):
         self.store.settings["directory"] = self.directory.text()
+        self.store.save_settings()
+
+    def save_default_format(self):
+        value = self.default_format_box.currentData()
+        self.store.settings["default_format"] = value
+        self.store.save_settings()
+        position = self.fmt.findText(value)
+        if position >= 0:
+            self.fmt.setCurrentIndex(position)
+
+    def image_settings_changed(self):
+        self.update_image_controls()
+        self.save_image_settings()
+
+    def update_image_controls(self):
+        optimized = self.image_mode_box.currentData() == "optimized"
+        self.image_quality.setEnabled(optimized)
+        self.image_max_width.setEnabled(optimized)
+
+    def save_image_settings(self):
+        self.store.settings["image_mode"] = self.image_mode_box.currentData()
+        self.store.settings["image_quality"] = self.image_quality.value()
+        self.store.settings["image_max_width"] = self.image_max_width.value()
         self.store.save_settings()
 
     def clear_cache(self):

@@ -79,7 +79,10 @@ class DownloadCancelled(Exception):
         return "CANCELLED: download interrupted"
 
 
-def perform_download(task, book, branch, fmt, start_id, end_id, path, cache, token):
+def perform_download(
+    task, book, branch, fmt, start_id, end_id, path, cache, token,
+    image_mode="original", image_quality=85, image_max_width=1600,
+):
     """Download one queued book while observing cooperative cancellation."""
 
     def check_cancel(*_):
@@ -101,6 +104,9 @@ def perform_download(task, book, branch, fmt, start_id, end_id, path, cache, tok
             chapter_end_id=end_id,
             cache_dir=cache,
             resume=True,
+            image_mode=image_mode,
+            image_quality=image_quality,
+            image_max_width=image_max_width,
             progress=progress,
             status=check_cancel,
         )

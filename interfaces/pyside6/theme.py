@@ -65,10 +65,12 @@ def apply_theme(app: QApplication, mode: str = "system"):
         }}
         QLabel#coverPreview {{ background: {elevated}; border: 1px solid {outline}; }}
         QLabel#coverPreview:hover {{ border-color: {accent}; }}
-        QLineEdit, QComboBox, QTableWidget, QPlainTextEdit {{
+        QLineEdit, QComboBox, QSpinBox, QTableWidget, QPlainTextEdit {{
             background: {elevated}; border-color: {outline}; selection-background-color: {accent};
         }}
-        QLineEdit:focus, QComboBox:focus {{ border: 2px solid {accent}; padding: 8px 10px; }}
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+            border: 2px solid {accent}; padding: 8px 10px;
+        }}
         QPushButton {{ background: {surface}; border-color: {outline}; }}
         QPushButton:hover {{ background: {elevated}; border-color: {accent}; }}
         QPushButton#primaryButton {{ background: {accent}; color: #ffffff; border-color: {accent}; }}
@@ -122,11 +124,11 @@ QTabBar::tab {
     border-bottom: 2px solid transparent;
 }
 QTabBar::tab:selected { font-weight: 650; }
-QLineEdit, QComboBox, QPlainTextEdit, QTableWidget {
+QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTableWidget {
     border: 1px solid palette(mid); border-radius: 8px; padding: 9px 11px;
 }
-QLineEdit, QComboBox { min-height: 20px; }
-QComboBox::drop-down { border: 0; width: 24px; }
+QLineEdit, QComboBox, QSpinBox { min-height: 20px; }
+QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button { border: 0; width: 24px; }
 QPushButton {
     padding: 9px 16px; border: 1px solid palette(mid); border-radius: 8px;
     font-weight: 600;

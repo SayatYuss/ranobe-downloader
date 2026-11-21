@@ -125,6 +125,10 @@ class DownloadPageMixin:
         self.scope.addItems(["Все главы", "Первые 10", "Последние 10", "Диапазон"])
         self.scope.currentIndexChanged.connect(self.update_scope)
         self.fmt = FormatSelector()
+        default_format = self.store.settings.get("default_format", "epub")
+        default_position = self.fmt.findText(default_format)
+        if default_position >= 0:
+            self.fmt.setCurrentIndex(default_position)
         fields.addWidget(scope_label, 2, 0)
         fields.addWidget(format_label, 2, 1)
         fields.addWidget(self.scope, 3, 0)
@@ -221,6 +225,9 @@ class DownloadPageMixin:
         self.book, cover = result
         self.set_lookup_busy(False)
         self.scope.setCurrentIndex(0)
+        default_position = self.fmt.findText(self.store.settings.get("default_format", "epub"))
+        if default_position >= 0:
+            self.fmt.setCurrentIndex(default_position)
         self.title_label.setText(self.book.title)
         self.cover_pixmap = None
         self.cover_available = False
@@ -470,6 +477,9 @@ class DownloadPageMixin:
             path,
             self.store.cache,
             self.token_store.load(),
+            self.store.settings.get("image_mode", "original"),
+            self.store.settings.get("image_quality", 85),
+            self.store.settings.get("image_max_width", 1600),
             on_done=completed,
             on_failure=failed,
         )
