@@ -22,7 +22,7 @@ python -m build
 python -m twine check dist/*
 ```
 
-На Linux без дисплея задайте `QT_QPA_PLATFORM=offscreen`. В `web` отдельно выполните `npm install` и `npm run build`.
+На Linux без дисплея задайте `QT_QPA_PLATFORM=offscreen`. В `web` отдельно выполните `npm ci` и `npm run build`.
 
 ## Публикация
 

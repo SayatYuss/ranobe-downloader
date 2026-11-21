@@ -17,7 +17,7 @@ python -m uvicorn interfaces.http.api:app --host 127.0.0.1 --port 8000
 
 ```bash
 cd web
-npm install
+npm ci
 npm run dev
 ```
 

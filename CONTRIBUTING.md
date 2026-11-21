@@ -20,7 +20,7 @@ python -m pip install -e '.[desktop,http,telegram,images]'
 python -m unittest discover -s tests -v
 ```
 
-Для Linux без дисплея задайте `QT_QPA_PLATFORM=offscreen`. В `web` выполните `npm install` и `npm run build`.
+Для Linux без дисплея задайте `QT_QPA_PLATFORM=offscreen`. В `web` выполните `npm ci` и `npm run build`.
 
 Для исправлений добавляйте тесты воспроизведения и существенного поведения. Используйте детерминированные фиктивные данные вместо реальных запросов, когда это возможно.
 
