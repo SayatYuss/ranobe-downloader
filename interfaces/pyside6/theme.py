@@ -1,4 +1,4 @@
-"""Compact neutral Qt styling with system/light/dark palette support."""
+"""Polished neutral Qt styling with system/light/dark palette support."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
@@ -15,43 +15,91 @@ def apply_theme(app: QApplication, mode: str = "system"):
     dark = mode == "dark" or (
         mode == "system" and app.styleHints().colorScheme() == Qt.ColorScheme.Dark
     )
-    base = "#202124" if dark else "#ffffff"
-    surface = "#292b2e" if dark else "#f6f6f6"
-    text = "#eeeeee" if dark else "#202124"
-    muted = "#b9bcc1" if dark else "#666a70"
-    outline = "#45484c" if dark else "#d7dade"
+    base = "#111318" if dark else "#f4f6fa"
+    surface = "#1a1d24" if dark else "#ffffff"
+    elevated = "#222630" if dark else "#f8f9fc"
+    text = "#f2f4f7" if dark else "#18202d"
+    muted = "#a4a9b3" if dark else "#687080"
+    outline = "#343946" if dark else "#dce1e9"
+    accent = "#858bff" if dark else "#5962df"
+    accent_hover = "#969bff" if dark else "#4852cf"
+    accent_pressed = "#7379e8" if dark else "#3d46b8"
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(base))
     palette.setColor(QPalette.ColorRole.WindowText, QColor(text))
     palette.setColor(QPalette.ColorRole.Base, QColor(surface))
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(base))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(elevated))
     palette.setColor(QPalette.ColorRole.Text, QColor(text))
     palette.setColor(QPalette.ColorRole.Button, QColor(surface))
     palette.setColor(QPalette.ColorRole.ButtonText, QColor(text))
-    palette.setColor(QPalette.ColorRole.Highlight, QColor("#747b83" if dark else "#a5abb2"))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff" if dark else "#141414"))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(accent))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
     palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(muted))
     app.setPalette(palette)
     app.setStyleSheet(STYLE + f"""
         QWidget {{ color: {text}; }}
-        QLineEdit, QComboBox, QTableWidget, QPlainTextEdit {{ background: {surface}; border-color: {outline}; }}
+        QMainWindow, QWidget#appShell {{ background: {base}; }}
+        QFrame#card {{ background: {surface}; border: 1px solid {outline}; }}
+        QFrame#statusCard {{ background: {elevated}; border: 1px solid {outline}; }}
+        QLabel#mutedText, QLabel#fieldLabel {{ color: {muted}; }}
+        QLabel#accountBadge, QLabel#formatBadge {{
+            color: {muted}; background: {elevated}; border: 1px solid {outline};
+        }}
+        QLabel#coverPlaceholder {{
+            color: {muted}; background: {elevated}; border: 1px dashed {outline};
+        }}
+        QLineEdit, QComboBox, QTableWidget, QPlainTextEdit {{
+            background: {elevated}; border-color: {outline}; selection-background-color: {accent};
+        }}
+        QLineEdit:focus, QComboBox:focus {{ border: 2px solid {accent}; padding: 8px 10px; }}
         QPushButton {{ background: {surface}; border-color: {outline}; }}
-        QPushButton:hover {{ background: {'#34373a' if dark else '#e9eaec'}; }}
+        QPushButton:hover {{ background: {elevated}; border-color: {accent}; }}
+        QPushButton#primaryButton {{ background: {accent}; color: #ffffff; border-color: {accent}; }}
+        QPushButton#primaryButton:hover {{ background: {accent_hover}; border-color: {accent_hover}; }}
+        QPushButton#primaryButton:pressed {{ background: {accent_pressed}; }}
+        QPushButton#primaryButton:disabled {{
+            background: {outline}; color: {muted}; border-color: {outline};
+        }}
+        QTabBar::tab:selected {{ color: {accent}; border-bottom-color: {accent}; }}
+        QProgressBar {{ background: {surface}; border-color: {outline}; }}
+        QProgressBar::chunk {{ background: {accent}; }}
+        QHeaderView::section {{ background: {surface}; border-bottom-color: {outline}; }}
     """)
 
 STYLE = """
 QWidget { font-size: 13px; }
 QMainWindow { background: palette(window); }
-QTabWidget::pane { border: 0; }
-QTabBar::tab { padding: 11px 20px; margin-right: 3px; border-bottom: 2px solid transparent; }
-QTabBar::tab:selected { border-bottom: 2px solid palette(window-text); font-weight: 600; }
-QLineEdit, QComboBox, QPlainTextEdit, QTableWidget {
-    border: 1px solid palette(mid); border-radius: 6px; padding: 7px;
+QLabel#brandTitle { font-size: 18px; font-weight: 700; }
+QLabel#pageTitle { font-size: 22px; font-weight: 700; }
+QLabel#bookTitle { font-size: 18px; font-weight: 650; }
+QLabel#fieldLabel { font-size: 11px; font-weight: 600; }
+QLabel#statusText { font-weight: 600; }
+QLabel#accountBadge, QLabel#formatBadge {
+    border-radius: 11px; padding: 5px 10px; font-size: 11px; font-weight: 600;
 }
-QPushButton { padding: 8px 16px; border: 1px solid palette(mid); border-radius: 6px; }
+QLabel#coverPlaceholder { border-radius: 10px; padding: 12px; }
+QFrame#card, QFrame#statusCard { border-radius: 12px; }
+QTabWidget::pane { border: 0; }
+QTabBar::tab {
+    padding: 11px 18px; margin-right: 4px; border: 0;
+    border-bottom: 2px solid transparent;
+}
+QTabBar::tab:selected { font-weight: 650; }
+QLineEdit, QComboBox, QPlainTextEdit, QTableWidget {
+    border: 1px solid palette(mid); border-radius: 8px; padding: 9px 11px;
+}
+QLineEdit, QComboBox { min-height: 20px; }
+QComboBox::drop-down { border: 0; width: 24px; }
+QPushButton {
+    padding: 9px 16px; border: 1px solid palette(mid); border-radius: 8px;
+    font-weight: 600;
+}
 QPushButton:disabled { color: palette(mid); }
-QProgressBar { border: 1px solid palette(mid); border-radius: 4px; text-align: center; height: 12px; }
-QProgressBar::chunk { background: palette(midlight); border-radius: 3px; }
-QHeaderView::section { padding: 8px; border: 0; border-bottom: 1px solid palette(mid); }
+QProgressBar {
+    border: 1px solid palette(mid); border-radius: 4px; height: 7px;
+    max-height: 7px;
+}
+QProgressBar::chunk { border-radius: 3px; }
+QHeaderView::section { padding: 9px; border: 0; border-bottom: 1px solid palette(mid); }
 """
 
