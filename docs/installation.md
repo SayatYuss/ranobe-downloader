@@ -17,7 +17,7 @@ git clone https://github.com/SayatYuss/ranobe-downloader.git
 cd ranobe-downloader
 ```
 
-Основная ветка — `main`; разработка ведётся в `develop`. Для воспроизводимого запуска конкретного выпуска можно переключиться на его тег, например `git switch --detach v0.4.0`.
+Ветка `main` содержит опубликованный код, а текущая разработка ведётся в `develop`. Для воспроизводимого запуска используется тег нужного выпуска из [GitHub Releases](https://github.com/SayatYuss/ranobe-downloader/releases), например `git switch --detach vX.Y.Z`.
 
 ## Виртуальное окружение
 
