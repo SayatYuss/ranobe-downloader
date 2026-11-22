@@ -74,7 +74,7 @@ jobs:
       - name: Build Web UI distribution
         working-directory: web
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npm run build
       - name: Package Web UI as static archive
         shell: bash

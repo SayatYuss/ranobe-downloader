@@ -21,7 +21,7 @@ jobs:
           node-version: "22"
       - name: Install dependencies
         working-directory: web
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Type check and build
         working-directory: web
         run: npm run build
