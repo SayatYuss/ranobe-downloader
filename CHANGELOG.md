@@ -2,13 +2,14 @@
 
 Изменения сгруппированы по выпускам. Установка и использование: [README](README.md), все руководства: [docs](docs/README.md).
 
-## [0.4.2] - 2026-11-13
+## [0.4.2] — 2026-11-13
 
-### Fixed
-- Fixed Windows atomic file export failure.
-- Fixed EPUB and TXT export errors caused by invalid file descriptors.
+### Исправлено
 
-## [0.4.1] — 2026-11-1
+- Исправлена ошибка атомарной записи файлов в Windows.
+- Исправлены ошибки экспорта EPUB и TXT из-за некорректных файловых дескрипторов.
+
+## [0.4.1] — 2026-11-01
 
 ### Добавлено
 
@@ -171,3 +172,5 @@
 [0.4.0]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.4.0
 
 [0.4.1]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.4.1
+
+[0.4.2]: https://github.com/SayatYuss/ranobe-downloader/releases/tag/v0.4.2
