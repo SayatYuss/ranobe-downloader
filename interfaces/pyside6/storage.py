@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 from PySide6.QtCore import QStandardPaths
 
 APP_NAME = "RanobeDownloader"
+DEFAULT_SETTINGS = {
+    "theme": "system",
+    "default_format": "epub",
+    "image_mode": "original",
+    "image_quality": 85,
+    "image_max_width": 1600,
+}
 
 
 def app_data() -> Path:
@@ -31,10 +38,24 @@ class Store:
         self.cache.mkdir(exist_ok=True)
         self.settings_file = self.root / "settings.json"
         self.history_file = self.root / "history.json"
-        self.settings = self._read(self.settings_file, {"directory": str(downloads_dir()), "theme": "system"})
+        defaults = {"directory": str(downloads_dir()), **DEFAULT_SETTINGS}
+        self.settings = self._read(self.settings_file, defaults)
         self.history = self._read(self.history_file, [])
         if not isinstance(self.settings, dict):
-            self.settings = {"directory": str(downloads_dir()), "theme": "system"}
+            self.settings = defaults
+        else:
+            for key, value in defaults.items():
+                self.settings.setdefault(key, value)
+        if self.settings["default_format"] not in ("epub", "txt", "html"):
+            self.settings["default_format"] = "epub"
+        if self.settings["image_mode"] not in ("original", "optimized"):
+            self.settings["image_mode"] = "original"
+        if type(self.settings["image_quality"]) is not int:
+            self.settings["image_quality"] = 85
+        self.settings["image_quality"] = min(100, max(1, self.settings["image_quality"]))
+        if type(self.settings["image_max_width"]) is not int:
+            self.settings["image_max_width"] = 1600
+        self.settings["image_max_width"] = min(4096, max(320, self.settings["image_max_width"]))
         if not isinstance(self.history, list):
             self.history = []
 
